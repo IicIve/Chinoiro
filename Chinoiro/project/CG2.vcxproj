@@ -80,7 +80,7 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <AdditionalIncludeDirectories>$(projectDir);$(projectDir)include/engine;$(projectDir)externals;$(projectDir)externals/imgui;$(projectDir)externals/assimp/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(projectDir);$(projectDir)include/engine;$(projectDir)include/application;$(projectDir)externals;$(projectDir)externals/imgui;$(projectDir)externals/assimp/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -105,7 +105,7 @@
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <AdditionalIncludeDirectories>$(projectDir);$(projectDir)include/engine;$(projectDir)externals;$(projectDir)externals/imgui;$(projectDir)externals/assimp/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(projectDir);$(projectDir)include/engine;$(projectDir)include/application;$(projectDir)externals;$(projectDir)externals/imgui;$(projectDir)externals/assimp/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -133,7 +133,7 @@
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <Optimization>Disabled</Optimization>
       <WholeProgramOptimization>false</WholeProgramOptimization>
-      <AdditionalIncludeDirectories>$(projectDir);$(projectDir)include/engine;$(projectDir)externals;$(projectDir)externals/imgui;$(projectDir)externals/assimp/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(projectDir);$(projectDir)include/engine;$(projectDir)include/application;$(projectDir)externals;$(projectDir)externals/imgui;$(projectDir)externals/assimp/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -149,17 +149,22 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="AudioManager.cpp" />
-    <ClCompile Include="Cylinder.cpp" />
-    <ClCompile Include="Framework.cpp" />
-    <ClCompile Include="Game.cpp" />
-    <ClCompile Include="GamePlayScene.cpp" />
-    <ClCompile Include="ImGuiManager.cpp" />
-    <ClCompile Include="KeyframeAnimation.cpp" />
-    <ClCompile Include="Particle.cpp" />
-    <ClCompile Include="ParticleManager.cpp" />
-    <ClCompile Include="Ring.cpp" />
-    <ClCompile Include="SkyBox.cpp" />
+    <ClCompile Include="src\engine\AudioManager.cpp" />
+    <ClCompile Include="src\engine\BaseScene.cpp" />
+    <ClCompile Include="src\engine\Cylinder.cpp" />
+    <ClCompile Include="src\engine\Framework.cpp" />
+    <ClCompile Include="src\engine\Game.cpp" />
+    <ClCompile Include="src\application\GamePlayScene.cpp" />
+    <ClCompile Include="src\application\Enemy.cpp" />
+    <ClCompile Include="src\application\MapChipField.cpp" />
+    <ClCompile Include="src\application\Player.cpp" />
+    <ClCompile Include="src\engine\ImGuiManager.cpp" />
+    <ClCompile Include="src\engine\KeyframeAnimation.cpp" />
+    <ClCompile Include="src\engine\Particle.cpp" />
+    <ClCompile Include="src\engine\ParticleManager.cpp" />
+    <ClCompile Include="src\engine\Ring.cpp" />
+    <ClCompile Include="src\engine\SceneManager.cpp" />
+    <ClCompile Include="src\engine\SkyBox.cpp" />
     <ClCompile Include="src\engine\Camera.cpp" />
     <ClCompile Include="src\engine\D3DResourceLeakChecker.cpp" />
     <ClCompile Include="src\engine\DirectXCommon.cpp" />
@@ -202,7 +207,7 @@
     <ClCompile Include="src\engine\TextureManager.cpp" />
     <ClCompile Include="src\engine\Vector.cpp" />
     <ClCompile Include="src\engine\Window.cpp" />
-    <ClCompile Include="TitleScene.cpp" />
+    <ClCompile Include="src\application\TitleScene.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="resources\shaders\Object3d.PS.hlsl">
@@ -225,12 +230,16 @@
     <None Include=".editorconfig" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="AudioManager.h" />
-    <ClInclude Include="Cylinder.h" />
-    <ClInclude Include="Framework.h" />
-    <ClInclude Include="Game.h" />
-    <ClInclude Include="GamePlayScene.h" />
-    <ClInclude Include="ImGuiManager.h" />
+    <ClInclude Include="include\engine\AudioManager.h" />
+    <ClInclude Include="include\engine\BaseScene.h" />
+    <ClInclude Include="include\engine\Cylinder.h" />
+    <ClInclude Include="include\engine\Framework.h" />
+    <ClInclude Include="include\engine\Game.h" />
+    <ClInclude Include="include\application\GamePlayScene.h" />
+    <ClInclude Include="include\application\Enemy.h" />
+    <ClInclude Include="include\application\MapChipField.h" />
+    <ClInclude Include="include\application\Player.h" />
+    <ClInclude Include="include\engine\ImGuiManager.h" />
     <ClInclude Include="include\engine\Camera.h" />
     <ClInclude Include="include\engine\D3DResourceLeakChecker.h" />
     <ClInclude Include="include\engine\DirectXCommon.h" />
@@ -259,12 +268,13 @@
     <ClInclude Include="include\engine\TextureManager.h" />
     <ClInclude Include="include\engine\Vector.h" />
     <ClInclude Include="include\engine\Window.h" />
-    <ClInclude Include="KeyframeAnimation.h" />
-    <ClInclude Include="Particle.h" />
-    <ClInclude Include="ParticleManager.h" />
-    <ClInclude Include="Ring.h" />
-    <ClInclude Include="SkyBox.h" />
-    <ClInclude Include="TitleScene.h" />
+    <ClInclude Include="include\engine\KeyframeAnimation.h" />
+    <ClInclude Include="include\engine\Particle.h" />
+    <ClInclude Include="include\engine\ParticleManager.h" />
+    <ClInclude Include="include\engine\Ring.h" />
+    <ClInclude Include="include\engine\SceneManager.h" />
+    <ClInclude Include="include\engine\SkyBox.h" />
+    <ClInclude Include="include\application\TitleScene.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="externals\imgui\LICENSE.txt" />
