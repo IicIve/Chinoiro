@@ -1,11 +1,15 @@
 
 #include "Window.h"
 #include <cstdint>
+#ifdef USE_IMGUI
 #include "externals/imgui/imgui.h"
+#endif
 
 #pragma comment(lib, "winmm.lib")
 
+#ifdef USE_IMGUI
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+#endif
 
 void Window::Initialize() {
 	HRESULT hr = CoInitializeEx(0, COINIT_MULTITHREADED);
@@ -25,7 +29,7 @@ void Window::Initialize() {
 
 	 hwnd = CreateWindow(
 		wc.lpszClassName,
-		L"CG2",
+		L"chinoiro",
 		WS_OVERLAPPEDWINDOW,
 		CW_USEDEFAULT,
 		CW_USEDEFAULT,
@@ -61,9 +65,11 @@ void Window::Finalize() {
 
 LRESULT CALLBACK Window::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 
+#ifdef USE_IMGUI
 	if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam)) {
 		return true;
 	}
+#endif
 
 	//メッセージに応じてゲーム固有の処理を行う
 	switch (msg) {

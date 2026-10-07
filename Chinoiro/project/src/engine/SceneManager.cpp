@@ -8,13 +8,15 @@
 #include <utility>
 
 SceneManager::SceneManager(Input *input, DirectXCommon *dxCommon,
-                           SrvManager *srvManager, ModelCommon *modelCommon)
+                           SrvManager *srvManager, ModelCommon *modelCommon,
+                           AudioManager *audioManager)
     : input(input), dxCommon(dxCommon), srvManager(srvManager),
-      modelCommon(modelCommon) {
+      modelCommon(modelCommon), audioManager(audioManager) {
   assert(input);
   assert(dxCommon);
   assert(srvManager);
   assert(modelCommon);
+  assert(audioManager);
 }
 
 SceneManager::~SceneManager() = default;
@@ -57,7 +59,8 @@ void SceneManager::ChangeScene(SceneType sceneType) {
 std::unique_ptr<BaseScene> SceneManager::CreateScene(SceneType sceneType) {
   switch (sceneType) {
   case SceneType::Title:
-    return std::make_unique<TitleScene>(this, input, dxCommon, modelCommon);
+    return std::make_unique<TitleScene>(this, input, dxCommon, modelCommon,
+                                        audioManager);
 
   case SceneType::GamePlay:
     return std::make_unique<GamePlayScene>(this, input, dxCommon, srvManager,

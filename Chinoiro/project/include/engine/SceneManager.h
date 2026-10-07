@@ -3,6 +3,7 @@
 #include <memory>
 
 class BaseScene;
+class AudioManager;
 class DirectXCommon;
 class Input;
 class ModelCommon;
@@ -16,7 +17,7 @@ enum class SceneType {
 class SceneManager {
 public:
   SceneManager(Input *input, DirectXCommon *dxCommon, SrvManager *srvManager,
-               ModelCommon *modelCommon);
+               ModelCommon *modelCommon, AudioManager *audioManager);
   ~SceneManager();
 
   SceneManager(const SceneManager &) = delete;
@@ -37,6 +38,7 @@ private:
   DirectXCommon *dxCommon = nullptr;
   SrvManager *srvManager = nullptr;
   ModelCommon *modelCommon = nullptr;
+  AudioManager *audioManager = nullptr;
 
   std::unique_ptr<BaseScene> currentScene;
   std::unique_ptr<BaseScene> nextScene;

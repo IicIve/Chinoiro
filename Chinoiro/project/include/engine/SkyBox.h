@@ -37,6 +37,8 @@ public:
     void Update(Camera* camera);
     void Draw();
 
+    void SetRotate(const Vector3& rotate) { transform.rotate = rotate; }
+
     //共通描画設定
     void CreatePrimitiveTopology();
 

@@ -8,7 +8,8 @@ Game::~Game() = default;
 
 void Game::Initialize() {
   sceneManager =
-      std::make_unique<SceneManager>(input, dxCommon, srvManager, modelCommon);
+      std::make_unique<SceneManager>(input, dxCommon, srvManager, modelCommon,
+                                     audioManager);
   sceneManager->Initialize(SceneType::Title);
 }
 

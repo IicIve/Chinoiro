@@ -3,28 +3,15 @@
 #include <cassert>
 #include <cstdint>
 #include <cstring>
-#include <fstream>
 #include <mfapi.h>
+#include <mfidl.h>
+#include <mfreadwrite.h>
+#include <vector>
 
 #pragma comment(lib, "xaudio2.lib")
 #pragma comment(lib, "mfplat.lib")
-
-namespace {
-	struct ChunkHeader {
-		char id[4];
-		int32_t size;
-	};
-
-	struct RiffHeader {
-		ChunkHeader chunk;
-		char type[4];
-	};
-
-	struct FormatChunk {
-		ChunkHeader chunk;
-		WAVEFORMATEX fmt;
-	};
-}
+#pragma comment(lib, "mfreadwrite.lib")
+#pragma comment(lib, "mfuuid.lib")
 
 void AudioManager::Initialize() {
 	HRESULT result = MFStartup(MF_VERSION, MFSTARTUP_NOSOCKET);
@@ -49,36 +36,74 @@ void AudioManager::Finalize() {
 }
 
 AudioManager::SoundData AudioManager::Load(const std::string& filename) {
-	std::ifstream file(filename, std::ios::binary);
-	assert(file.is_open());
+	const int wideLength = MultiByteToWideChar(CP_UTF8, 0, filename.c_str(), -1,
+	                                           nullptr, 0);
+	assert(wideLength > 0);
+	std::wstring wideFilename(static_cast<size_t>(wideLength), L'\0');
+	MultiByteToWideChar(CP_UTF8, 0, filename.c_str(), -1, wideFilename.data(),
+	                    wideLength);
 
-	RiffHeader riff{};
-	file.read(reinterpret_cast<char*>(&riff), sizeof(riff));
-	assert(file && std::strncmp(riff.chunk.id, "RIFF", 4) == 0);
-	assert(std::strncmp(riff.type, "WAVE", 4) == 0);
+	Microsoft::WRL::ComPtr<IMFSourceReader> reader;
+	HRESULT result = MFCreateSourceReaderFromURL(wideFilename.c_str(), nullptr,
+	                                             &reader);
+	assert(SUCCEEDED(result));
 
-	FormatChunk format{};
-	file.read(reinterpret_cast<char*>(&format.chunk), sizeof(format.chunk));
-	assert(file && std::strncmp(format.chunk.id, "fmt ", 4) == 0);
-	assert(format.chunk.size >= 16 && format.chunk.size <= static_cast<int32_t>(sizeof(format.fmt)));
-	file.read(reinterpret_cast<char*>(&format.fmt), format.chunk.size);
-	assert(file);
+	Microsoft::WRL::ComPtr<IMFMediaType> outputType;
+	result = MFCreateMediaType(&outputType);
+	assert(SUCCEEDED(result));
+	result = outputType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Audio);
+	assert(SUCCEEDED(result));
+	result = outputType->SetGUID(MF_MT_SUBTYPE, MFAudioFormat_PCM);
+	assert(SUCCEEDED(result));
+	result = reader->SetCurrentMediaType(MF_SOURCE_READER_FIRST_AUDIO_STREAM,
+	                                     nullptr, outputType.Get());
+	assert(SUCCEEDED(result));
 
-	ChunkHeader data{};
-	file.read(reinterpret_cast<char*>(&data), sizeof(data));
-	while (file && std::strncmp(data.id, "data", 4) != 0) {
-		file.seekg(data.size + (data.size & 1), std::ios_base::cur);
-		file.read(reinterpret_cast<char*>(&data), sizeof(data));
+	Microsoft::WRL::ComPtr<IMFMediaType> currentType;
+	result = reader->GetCurrentMediaType(MF_SOURCE_READER_FIRST_AUDIO_STREAM,
+	                                     &currentType);
+	assert(SUCCEEDED(result));
+
+	WAVEFORMATEX* waveFormat = nullptr;
+	UINT32 waveFormatSize = 0;
+	result = MFCreateWaveFormatExFromMFMediaType(
+	    currentType.Get(), &waveFormat, &waveFormatSize,
+	    MFWaveFormatExConvertFlag_Normal);
+	assert(SUCCEEDED(result));
+	assert(waveFormatSize >= sizeof(WAVEFORMATEX));
+
+	std::vector<BYTE> audioBytes;
+	while (true) {
+		DWORD flags = 0;
+		Microsoft::WRL::ComPtr<IMFSample> sample;
+		result = reader->ReadSample(MF_SOURCE_READER_FIRST_AUDIO_STREAM, 0,
+		                            nullptr, &flags, nullptr, &sample);
+		assert(SUCCEEDED(result));
+		if (flags & MF_SOURCE_READERF_ENDOFSTREAM) {
+			break;
+		}
+		if (!sample) {
+			continue;
+		}
+
+		Microsoft::WRL::ComPtr<IMFMediaBuffer> mediaBuffer;
+		result = sample->ConvertToContiguousBuffer(&mediaBuffer);
+		assert(SUCCEEDED(result));
+
+		BYTE* data = nullptr;
+		DWORD dataSize = 0;
+		result = mediaBuffer->Lock(&data, nullptr, &dataSize);
+		assert(SUCCEEDED(result));
+		audioBytes.insert(audioBytes.end(), data, data + dataSize);
+		mediaBuffer->Unlock();
 	}
-	assert(file && data.size >= 0);
 
 	SoundData soundData{};
-	soundData.pBuffer = new BYTE[data.size];
-	file.read(reinterpret_cast<char*>(soundData.pBuffer), data.size);
-	assert(file);
-
-	soundData.wfex = format.fmt;
-	soundData.bufferSize = static_cast<unsigned int>(data.size);
+	soundData.wfex = *waveFormat;
+	CoTaskMemFree(waveFormat);
+	soundData.bufferSize = static_cast<unsigned int>(audioBytes.size());
+	soundData.pBuffer = new BYTE[soundData.bufferSize];
+	std::memcpy(soundData.pBuffer, audioBytes.data(), soundData.bufferSize);
 	return soundData;
 }
 
@@ -90,18 +115,33 @@ void AudioManager::Unload(SoundData* soundData) {
 	soundData->wfex = {};
 }
 
-void AudioManager::Play(const SoundData& soundData) {
+IXAudio2SourceVoice* AudioManager::Play(const SoundData& soundData, bool loop,
+	                                    float volume) {
 	IXAudio2SourceVoice* sourceVoice = nullptr;
 	HRESULT result = xAudio2_->CreateSourceVoice(&sourceVoice, &soundData.wfex);
+	assert(SUCCEEDED(result));
+	result = sourceVoice->SetVolume(volume);
 	assert(SUCCEEDED(result));
 
 	XAUDIO2_BUFFER buffer{};
 	buffer.pAudioData = soundData.pBuffer;
 	buffer.AudioBytes = soundData.bufferSize;
 	buffer.Flags = XAUDIO2_END_OF_STREAM;
+	buffer.LoopCount = loop ? XAUDIO2_LOOP_INFINITE : 0;
 
 	result = sourceVoice->SubmitSourceBuffer(&buffer);
 	assert(SUCCEEDED(result));
 	result = sourceVoice->Start();
 	assert(SUCCEEDED(result));
+	return sourceVoice;
+}
+
+void AudioManager::Stop(IXAudio2SourceVoice*& sourceVoice) {
+	if (!sourceVoice) {
+		return;
+	}
+	sourceVoice->Stop();
+	sourceVoice->FlushSourceBuffers();
+	sourceVoice->DestroyVoice();
+	sourceVoice = nullptr;
 }

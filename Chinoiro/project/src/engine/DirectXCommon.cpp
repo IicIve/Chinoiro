@@ -8,9 +8,11 @@
 
 #include "Logger.h"
 #include "StringUtility.h"
+#ifdef USE_IMGUI
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/imgui_impl_win32.h"
 #include "externals/imgui/imgui_impl_dx12.h"
+#endif
 #include "externals/DirectXTex/d3dx12.h"
 
 using namespace StringUtility;
@@ -560,6 +562,7 @@ void DirectXCommon::DXCCompilerInitialize() {
 }
 
 void DirectXCommon::ImGuiInitialize() {
+#ifdef USE_IMGUI
 	//ImGuiの初期化
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
@@ -567,6 +570,7 @@ void DirectXCommon::ImGuiInitialize() {
 	ImGui_ImplWin32_Init(window->GetHwnd());
 	ImGui_ImplDX12_Init(device.Get(), swapChainDesc.BufferCount, rtvDesc.Format, srvDescriptorHeap.Get(),
 		srvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), srvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
+#endif
 }
 
 void DirectXCommon::InitializeFixFPS() {

@@ -18,7 +18,9 @@ public:
 
 	SoundData Load(const std::string& filename);
 	void Unload(SoundData* soundData);
-	void Play(const SoundData& soundData);
+	IXAudio2SourceVoice* Play(const SoundData& soundData, bool loop = false,
+	                          float volume = 1.0f);
+	void Stop(IXAudio2SourceVoice*& sourceVoice);
 
 private:
 	Microsoft::WRL::ComPtr<IXAudio2> xAudio2_;
