@@ -329,6 +329,16 @@ void Player::Respawn() {
   UpdateRenderObject();
 }
 
+void Player::SetPosition(const Vector::Vector3 &newPosition) {
+  position = newPosition;
+  previousPosition = newPosition;
+  respawnPosition = newPosition;
+  velocity = {};
+  onGround = false;
+  jumpCount = 0;
+  UpdateRenderObject();
+}
+
 void Player::ResolveMovingPlatformCollision(
     const MapChipRect &platformRect,
     const Vector::Vector3 &platformMoveDelta) {

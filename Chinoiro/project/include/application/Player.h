@@ -31,6 +31,7 @@ public:
   void Update();
   void Draw();
   void Respawn();
+  void SetPosition(const Vector::Vector3 &newPosition);
   void ResolveMovingPlatformCollision(
       const MapChipRect &platformRect,
       const Vector::Vector3 &platformMoveDelta);

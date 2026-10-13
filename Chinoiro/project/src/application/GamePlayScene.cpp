@@ -13,6 +13,7 @@
 #include "Object3d.h"
 #include "Object3dCommon.h"
 #include "Player.h"
+#include "SceneEditor.h"
 #include "SceneManager.h"
 #include "SkyBox.h"
 #include "Sprite.h"
@@ -78,6 +79,10 @@ void GamePlayScene::Initialize() {
                      mapChipField.get(), playerPosition);
 
   GenerateEnemies();
+  sceneEditor = std::make_unique<SceneEditor>();
+  sceneEditor->Initialize(camera.get(), input);
+  RegisterEditorObjects();
+  sceneEditor->LoadScene();
 }
 
 std::unique_ptr<Object3d>
@@ -139,6 +144,25 @@ void GamePlayScene::GenerateEnemies() {
   spawnEnemy(32, 4);
 }
 
+void GamePlayScene::RegisterEditorObjects() {
+  sceneEditor->ClearSceneObjects();
+  sceneEditor->RegisterSceneObject(
+      "Player", [this]() { return player->GetPosition(); },
+      [this](const Vector::Vector3 &position) {
+        player->SetPosition(position);
+      });
+
+  for (size_t index = 0; index < enemies.size(); ++index) {
+    Enemy *enemy = enemies[index].get();
+    sceneEditor->RegisterSceneObject(
+        "Enemy " + std::to_string(index),
+        [enemy]() { return enemy->GetPosition(); },
+        [enemy](const Vector::Vector3 &position) {
+          enemy->SetPosition(position);
+        });
+  }
+}
+
 void GamePlayScene::CheckPlayerEnemyCollisions() {
   const PlayerAABB playerAABB = player->GetAABB();
   for (auto enemyIterator = enemies.begin();
@@ -155,6 +179,7 @@ void GamePlayScene::CheckPlayerEnemyCollisions() {
     if (isColliding) {
       if (player->IsAttacking()) {
         enemyIterator = enemies.erase(enemyIterator);
+        RegisterEditorObjects();
         continue;
       }
 
@@ -213,8 +238,13 @@ void GamePlayScene::UpdateCamera() {
 }
 
 void GamePlayScene::Update() {
+  sceneEditor->Update({cameraPosition.x, cameraPosition.y, 0.0f});
   if (input->TriggerKey(DIK_ESCAPE)) {
     sceneManager->ChangeScene(SceneType::Title);
+    return;
+  }
+
+  if (!sceneEditor->ShouldRunGame()) {
     return;
   }
 
@@ -282,6 +312,7 @@ void GamePlayScene::Draw() {
   for (const std::unique_ptr<Object3d> &object : goalObjects) {
     object->Draw();
   }
+  sceneEditor->Draw();
   for (const MovingPlatform &platform : movingPlatforms) {
     platform.object->Draw();
   }
@@ -291,10 +322,16 @@ void GamePlayScene::Draw() {
   }
 
   SpriteCommon::GetInstance()->CreatePrimitiveTopology();
-  fadeSprite->Draw();
+  if (!sceneEditor->IsEditMode()) {
+    fadeSprite->Draw();
+  }
 }
 
 void GamePlayScene::Finalize() {
+  if (sceneEditor) {
+    sceneEditor->Finalize();
+    sceneEditor.reset();
+  }
   fadeSprite.reset();
   enemies.clear();
   player.reset();

@@ -17,6 +17,20 @@ void ImGuiManager::Initialize([[maybe_unused]] Window* window, [[maybe_unused]] 
 	ImGui::CreateContext();
 	ImGui::StyleColorsDark();
 
+	ImGuiIO& io = ImGui::GetIO();
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+
+	ImGuiStyle& style = ImGui::GetStyle();
+	style.WindowRounding = 5.0f;
+	style.ChildRounding = 4.0f;
+	style.FrameRounding = 3.0f;
+	style.PopupRounding = 4.0f;
+	style.ScrollbarRounding = 4.0f;
+	style.GrabRounding = 3.0f;
+	style.WindowPadding = {10.0f, 10.0f};
+	style.FramePadding = {6.0f, 4.0f};
+	style.ItemSpacing = {8.0f, 6.0f};
+
 	ImGui_ImplWin32_Init(window->GetHwnd());
 
 	const uint32_t imguiSrvIndex = srvManager_->Allocate();

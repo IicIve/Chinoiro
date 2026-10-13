@@ -158,6 +158,7 @@
     <ClCompile Include="src\application\Enemy.cpp" />
     <ClCompile Include="src\application\MapChipField.cpp" />
     <ClCompile Include="src\application\Player.cpp" />
+    <ClCompile Include="src\application\SceneEditor.cpp" />
     <ClCompile Include="src\engine\ImGuiManager.cpp" />
     <ClCompile Include="src\engine\KeyframeAnimation.cpp" />
     <ClCompile Include="src\engine\Particle.cpp" />
@@ -239,6 +240,7 @@
     <ClInclude Include="include\application\Enemy.h" />
     <ClInclude Include="include\application\MapChipField.h" />
     <ClInclude Include="include\application\Player.h" />
+    <ClInclude Include="include\application\SceneEditor.h" />
     <ClInclude Include="include\engine\ImGuiManager.h" />
     <ClInclude Include="include\engine\Camera.h" />
     <ClInclude Include="include\engine\D3DResourceLeakChecker.h" />

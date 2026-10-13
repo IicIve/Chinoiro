@@ -186,6 +186,13 @@ void Enemy::Update() {
   UpdateRenderObject();
 }
 
+void Enemy::SetPosition(const Vector::Vector3 &newPosition) {
+  position = newPosition;
+  velocity.y = 0.0f;
+  onGround = false;
+  UpdateRenderObject();
+}
+
 void Enemy::UpdateRenderObject() {
   object->SetTranslate(position);
   object->SetRotate(rotation);

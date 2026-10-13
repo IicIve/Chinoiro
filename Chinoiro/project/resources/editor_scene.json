@@ -1,0 +1,62 @@
+{
+  "name": "editor_scene",
+  "objects": [],
+  "scene_objects": [
+    {
+      "name": "Player",
+      "position": [
+        4.0,
+        13.0,
+        0.0
+      ]
+    },
+    {
+      "name": "Enemy 0",
+      "position": [
+        32.0,
+        2.0,
+        0.0
+      ]
+    },
+    {
+      "name": "Enemy 1",
+      "position": [
+        48.0,
+        2.0,
+        0.0
+      ]
+    },
+    {
+      "name": "Enemy 2",
+      "position": [
+        64.0,
+        2.0,
+        0.0
+      ]
+    },
+    {
+      "name": "Enemy 3",
+      "position": [
+        54.0,
+        16.0,
+        0.0
+      ]
+    },
+    {
+      "name": "Enemy 4",
+      "position": [
+        38.0,
+        30.0,
+        0.0
+      ]
+    },
+    {
+      "name": "Enemy 5",
+      "position": [
+        64.0,
+        30.0,
+        0.0
+      ]
+    }
+  ]
+}

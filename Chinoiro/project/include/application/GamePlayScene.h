@@ -15,6 +15,7 @@ class Model;
 class ModelCommon;
 class Object3d;
 class Player;
+class SceneEditor;
 class SceneManager;
 class SkyBox;
 class Sprite;
@@ -46,6 +47,7 @@ private:
                                              const Vector::Vector3 &position);
   void GenerateMapObjects();
   void GenerateEnemies();
+  void RegisterEditorObjects();
   void CheckPlayerEnemyCollisions();
   void RespawnPlayer();
   void UpdateCamera();
@@ -65,6 +67,7 @@ private:
   std::unique_ptr<SkyBox> skyBox;
   std::unique_ptr<Sprite> fadeSprite;
   std::unique_ptr<Player> player;
+  std::unique_ptr<SceneEditor> sceneEditor;
   std::vector<std::unique_ptr<Enemy>> enemies;
 
   std::vector<std::unique_ptr<Object3d>> blockObjects;
