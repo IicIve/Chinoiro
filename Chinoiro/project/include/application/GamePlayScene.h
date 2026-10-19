@@ -66,6 +66,7 @@ private:
   std::unique_ptr<Camera> camera;
   std::unique_ptr<SkyBox> skyBox;
   std::unique_ptr<Sprite> fadeSprite;
+  std::unique_ptr<Sprite> backToTitleSprite;
   std::unique_ptr<Player> player;
   std::unique_ptr<SceneEditor> sceneEditor;
   std::vector<std::unique_ptr<Enemy>> enemies;
@@ -76,5 +77,6 @@ private:
 
   Vector::Vector3 cameraPosition{20.0f, 16.0f, -45.0f};
   float movingPlatformTime = 0.0f;
-  float fadeAlpha = 1.0f;
+  float fadeAlpha = 0.0f;
+  float introCameraProgress = 0.0f;
 };

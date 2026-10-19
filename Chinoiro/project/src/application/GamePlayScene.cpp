@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cmath>
 #include <memory>
+#include <numbers>
 
 #include "Camera.h"
 #include "Enemy.h"
@@ -35,7 +36,8 @@ GamePlayScene::GamePlayScene(SceneManager *sceneManager, Input *input,
 GamePlayScene::~GamePlayScene() = default;
 
 void GamePlayScene::Initialize() {
-  fadeAlpha = 1.0f;
+  fadeAlpha = 0.0f;
+  introCameraProgress = 0.0f;
 
   mapChipField = std::make_unique<MapChipField>();
   mapChipField->LoadMapChipCsv("resources/maptip.csv");
@@ -70,6 +72,17 @@ void GamePlayScene::Initialize() {
   fadeSprite->SetColor({0.0f, 0.0f, 0.0f, fadeAlpha});
   fadeSprite->Update();
 
+  backToTitleSprite = std::make_unique<Sprite>();
+  backToTitleSprite->Initialize(SpriteCommon::GetInstance(),
+                                "resources/backToTitle.png");
+  backToTitleSprite->SetAnchorPoint({0.5f, 0.5f});
+  backToTitleSprite->SetPosition({310.0f, 340.0f});
+  backToTitleSprite->SetSize({310.0f, 33.0f});
+  backToTitleSprite->SetTextureLeftTop({42.0f, 142.0f});
+  backToTitleSprite->SetTextureSize({620.0f, 66.0f});
+  backToTitleSprite->SetColor({1.0f, 1.0f, 1.0f, 0.0f});
+  backToTitleSprite->Update();
+
   GenerateMapObjects();
 
   player = std::make_unique<Player>();
@@ -77,6 +90,13 @@ void GamePlayScene::Initialize() {
       mapChipField->GetMapChipPositionByIndex(2, 11);
   player->Initialize(playerModel.get(), camera.get(), input,
                      mapChipField.get(), playerPosition);
+  player->SetRenderRotationY(std::numbers::pi_v<float>);
+
+  // タイトル側と同じく顔の直前から開始する。
+  camera->SetRotate({0.0f, 0.0f, 0.0f});
+  camera->SetTranslate(
+      {playerPosition.x, playerPosition.y + 0.35f, playerPosition.z - 4.0f});
+  camera->Update();
 
   GenerateEnemies();
   sceneEditor = std::make_unique<SceneEditor>();
@@ -238,6 +258,48 @@ void GamePlayScene::UpdateCamera() {
 }
 
 void GamePlayScene::Update() {
+  if (introCameraProgress < 1.0f) {
+    if (input->TriggerKey(DIK_ESCAPE)) {
+      sceneManager->ChangeScene(SceneType::Title);
+      return;
+    }
+
+    introCameraProgress =
+        (std::min)(1.0f, introCameraProgress + 0.9f / 60.0f);
+    const float cameraProgress = introCameraProgress * introCameraProgress *
+                                 (3.0f - 2.0f * introCameraProgress);
+    const Vector::Vector3 &playerPosition = player->GetPosition();
+    const Vector::Vector3 faceCamera{playerPosition.x,
+                                     playerPosition.y + 0.35f,
+                                     playerPosition.z - 4.0f};
+    camera->SetTranslate(
+        {faceCamera.x + (cameraPosition.x - faceCamera.x) * cameraProgress,
+         faceCamera.y + (cameraPosition.y - faceCamera.y) * cameraProgress,
+         faceCamera.z + (cameraPosition.z - faceCamera.z) * cameraProgress});
+    camera->SetRotate({0.0f, 0.0f, 0.0f});
+    camera->Update();
+
+    const float playerRotation =
+        std::numbers::pi_v<float> -
+        std::numbers::pi_v<float> * 0.5f * cameraProgress;
+    player->SetRenderRotationY(playerRotation);
+    skyBox->Update(camera.get());
+
+    for (const std::unique_ptr<Object3d> &object : blockObjects) {
+      object->Update();
+    }
+    for (const std::unique_ptr<Object3d> &object : goalObjects) {
+      object->Update();
+    }
+    for (MovingPlatform &platform : movingPlatforms) {
+      platform.object->Update();
+    }
+    for (const std::unique_ptr<Enemy> &enemy : enemies) {
+      enemy->Update();
+    }
+    return;
+  }
+
   sceneEditor->Update({cameraPosition.x, cameraPosition.y, 0.0f});
   if (input->TriggerKey(DIK_ESCAPE)) {
     sceneManager->ChangeScene(SceneType::Title);
@@ -298,6 +360,8 @@ void GamePlayScene::Update() {
   }
   fadeSprite->SetColor({0.0f, 0.0f, 0.0f, fadeAlpha});
   fadeSprite->Update();
+  backToTitleSprite->SetColor({1.0f, 1.0f, 1.0f, 0.9f});
+  backToTitleSprite->Update();
 }
 
 void GamePlayScene::Draw() {
@@ -323,6 +387,7 @@ void GamePlayScene::Draw() {
 
   SpriteCommon::GetInstance()->CreatePrimitiveTopology();
   if (!sceneEditor->IsEditMode()) {
+    backToTitleSprite->Draw();
     fadeSprite->Draw();
   }
 }
@@ -332,6 +397,7 @@ void GamePlayScene::Finalize() {
     sceneEditor->Finalize();
     sceneEditor.reset();
   }
+  backToTitleSprite.reset();
   fadeSprite.reset();
   enemies.clear();
   player.reset();

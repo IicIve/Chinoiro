@@ -32,6 +32,7 @@ public:
   void Draw();
   void Respawn();
   void SetPosition(const Vector::Vector3 &newPosition);
+  void SetRenderRotationY(float rotationY);
   void ResolveMovingPlatformCollision(
       const MapChipRect &platformRect,
       const Vector::Vector3 &platformMoveDelta);

@@ -36,20 +36,30 @@ void SceneEditor::Initialize(Camera *camera, Input *input) {
   assert(input);
   this->camera = camera;
   this->input = input;
+#ifdef USE_IMGUI
   mode = Mode::Edit;
-  pauseGame = false;
+  visible = true;
   status = "Edit Mode - place and edit objects";
+#else
+  // ReleaseではエディターUIが無いため、必ずゲーム実行状態で開始する。
+  mode = Mode::Play;
+  visible = false;
+  status = "Play Mode";
+#endif
+  pauseGame = false;
   RefreshAssets();
 }
 
 void SceneEditor::Update(const Vector::Vector3 &spawnPosition) {
   assert(input);
+#ifdef USE_IMGUI
   if (input->TriggerKey(DIK_F1)) {
     visible = !visible;
   }
   if (input->TriggerKey(DIK_F2)) {
     SetMode(mode == Mode::Edit ? Mode::Play : Mode::Edit);
   }
+#endif
 
   DrawUI(spawnPosition);
   for (EditorObject &editorObject : objects) {

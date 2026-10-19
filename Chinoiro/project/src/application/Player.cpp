@@ -329,6 +329,11 @@ void Player::Respawn() {
   UpdateRenderObject();
 }
 
+void Player::SetRenderRotationY(float rotationY) {
+  rotation.y = rotationY;
+  UpdateRenderObject();
+}
+
 void Player::SetPosition(const Vector::Vector3 &newPosition) {
   position = newPosition;
   previousPosition = newPosition;
