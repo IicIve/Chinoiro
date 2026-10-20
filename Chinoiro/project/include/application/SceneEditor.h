@@ -9,6 +9,7 @@
 
 class Camera;
 class Input;
+class MapChipField;
 class Object3d;
 
 class SceneEditor final {
@@ -28,6 +29,8 @@ public:
       const std::string &name,
       std::function<Vector::Vector3()> getPosition,
       std::function<void(const Vector::Vector3 &)> setPosition);
+  void RegisterTileMap(MapChipField *mapChipField,
+                       std::function<void()> onMapChanged);
   void LoadScene();
 
   bool IsEditMode() const { return mode == Mode::Edit; }
@@ -60,6 +63,7 @@ private:
                  const Vector::Vector3 &rotate,
                  const Vector::Vector3 &scale);
   void SaveScene();
+  void DrawTileMapEditor();
   void SetMode(Mode newMode);
 
   Camera *camera = nullptr;
@@ -67,6 +71,8 @@ private:
   std::vector<std::string> assets;
   std::vector<EditorObject> objects;
   std::vector<SceneObject> sceneObjects;
+  MapChipField *mapChipField = nullptr;
+  std::function<void()> onMapChanged;
   std::string status;
   int selectedAsset = -1;
   int selectedObject = -1;
@@ -74,4 +80,10 @@ private:
   Mode mode = Mode::Edit;
   bool visible = true;
   bool pauseGame = false;
+  bool tileMapDirty = false;
+  int selectedTileType = 1;
+  int tileMapWidth = 100;
+  int tileMapHeight = 20;
+  int pendingTileMapWidth = 100;
+  int pendingTileMapHeight = 20;
 };

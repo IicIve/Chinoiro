@@ -21,6 +21,19 @@
 #include "SpriteCommon.h"
 #include "Window.h"
 
+namespace {
+
+float ClampCameraCoordinate(float value, float blockSize,
+                            uint32_t numBlocks, float margin) {
+  const float extent = blockSize * static_cast<float>(numBlocks - 1);
+  if (extent <= margin * 2.0f) {
+    return extent * 0.5f;
+  }
+  return std::clamp(value, margin, extent - margin);
+}
+
+} // namespace
+
 GamePlayScene::GamePlayScene(SceneManager *sceneManager, Input *input,
                              DirectXCommon *dxCommon, SrvManager *srvManager,
                              ModelCommon *modelCommon)
@@ -47,6 +60,9 @@ void GamePlayScene::Initialize() {
 
   goalModel = std::make_unique<Model>();
   goalModel->initialize(modelCommon, "resources/goal", "goal.obj");
+
+  needleModel = std::make_unique<Model>();
+  needleModel->initialize(modelCommon, "resources/block", "needle.obj");
 
   playerModel = std::make_unique<Model>();
   playerModel->initialize(modelCommon, "resources/player", "player.obj");
@@ -101,6 +117,8 @@ void GamePlayScene::Initialize() {
   GenerateEnemies();
   sceneEditor = std::make_unique<SceneEditor>();
   sceneEditor->Initialize(camera.get(), input);
+  sceneEditor->RegisterTileMap(mapChipField.get(),
+                               [this]() { GenerateMapObjects(); });
   RegisterEditorObjects();
   sceneEditor->LoadScene();
 }
@@ -118,6 +136,12 @@ GamePlayScene::CreateMapObject(Model *model,
 }
 
 void GamePlayScene::GenerateMapObjects() {
+  blockObjects.clear();
+  goalObjects.clear();
+  needleObjects.clear();
+  movingPlatforms.clear();
+  hazardColliders.clear();
+
   for (uint32_t y = 0; y < mapChipField->GetNumBlockVertical(); ++y) {
     for (uint32_t x = 0; x < mapChipField->GetNumBlockHorizontal(); ++x) {
       const MapChipType type = mapChipField->GetMapChipTypeByIndex(x, y);
@@ -140,6 +164,18 @@ void GamePlayScene::GenerateMapObjects() {
         movingPlatforms.emplace_back(std::move(platform));
         break;
       }
+
+      case MapChipType::Hole:
+        hazardColliders.emplace_back(mapChipField->GetRectByIndex(x, y));
+        break;
+
+      case MapChipType::Needle:
+        needleObjects.emplace_back(CreateMapObject(
+            needleModel.get(),
+            {position.x, position.y - MapChipField::kBlockHeight / 2.0f,
+             position.z}));
+        hazardColliders.emplace_back(mapChipField->GetRectByIndex(x, y));
+        break;
 
       case MapChipType::Blank:
         break;
@@ -213,20 +249,31 @@ void GamePlayScene::CheckPlayerEnemyCollisions() {
   }
 }
 
+bool GamePlayScene::CheckPlayerHazardCollision() const {
+  const PlayerAABB playerAABB = player->GetAABB();
+  for (const MapChipRect &hazardRect : hazardColliders) {
+    const bool isOverlapping =
+        playerAABB.min.x < hazardRect.right &&
+        playerAABB.max.x > hazardRect.left &&
+        playerAABB.min.y < hazardRect.top &&
+        playerAABB.max.y > hazardRect.bottom;
+    if (isOverlapping) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void GamePlayScene::RespawnPlayer() {
   player->Respawn();
 
   const Vector::Vector3 &position = player->GetPosition();
-  cameraPosition.x = std::clamp(
-      position.x, 20.0f,
-      MapChipField::kBlockWidth *
-              static_cast<float>(MapChipField::kNumBlockHorizontal - 1) -
-          20.0f);
-  cameraPosition.y = std::clamp(
-      position.y, 10.0f,
-      MapChipField::kBlockHeight *
-              static_cast<float>(MapChipField::kNumBlockVertical - 1) -
-          10.0f);
+  cameraPosition.x = ClampCameraCoordinate(
+      position.x, MapChipField::kBlockWidth,
+      mapChipField->GetNumBlockHorizontal(), 20.0f);
+  cameraPosition.y = ClampCameraCoordinate(
+      position.y, MapChipField::kBlockHeight,
+      mapChipField->GetNumBlockVertical(), 10.0f);
   camera->SetTranslate(cameraPosition);
   camera->Update();
 }
@@ -242,16 +289,12 @@ void GamePlayScene::UpdateCamera() {
   cameraPosition.x += (targetX - cameraPosition.x) * kFollowRate;
   cameraPosition.y += (targetY - cameraPosition.y) * kFollowRate;
 
-  cameraPosition.x = std::clamp(
-      cameraPosition.x, 20.0f,
-      MapChipField::kBlockWidth *
-              static_cast<float>(MapChipField::kNumBlockHorizontal - 1) -
-          20.0f);
-  cameraPosition.y = std::clamp(
-      cameraPosition.y, 10.0f,
-      MapChipField::kBlockHeight *
-              static_cast<float>(MapChipField::kNumBlockVertical - 1) -
-          10.0f);
+  cameraPosition.x = ClampCameraCoordinate(
+      cameraPosition.x, MapChipField::kBlockWidth,
+      mapChipField->GetNumBlockHorizontal(), 20.0f);
+  cameraPosition.y = ClampCameraCoordinate(
+      cameraPosition.y, MapChipField::kBlockHeight,
+      mapChipField->GetNumBlockVertical(), 10.0f);
 
   camera->SetTranslate(cameraPosition);
   camera->Update();
@@ -291,6 +334,9 @@ void GamePlayScene::Update() {
     for (const std::unique_ptr<Object3d> &object : goalObjects) {
       object->Update();
     }
+    for (const std::unique_ptr<Object3d> &object : needleObjects) {
+      object->Update();
+    }
     for (MovingPlatform &platform : movingPlatforms) {
       platform.object->Update();
     }
@@ -325,6 +371,9 @@ void GamePlayScene::Update() {
   }
 
   player->Update();
+  if (CheckPlayerHazardCollision()) {
+    RespawnPlayer();
+  }
   for (const std::unique_ptr<Enemy> &enemy : enemies) {
     enemy->Update();
   }
@@ -347,6 +396,9 @@ void GamePlayScene::Update() {
     object->Update();
   }
   for (const std::unique_ptr<Object3d> &object : goalObjects) {
+    object->Update();
+  }
+  for (const std::unique_ptr<Object3d> &object : needleObjects) {
     object->Update();
   }
   for (MovingPlatform &platform : movingPlatforms) {
@@ -376,6 +428,9 @@ void GamePlayScene::Draw() {
   for (const std::unique_ptr<Object3d> &object : goalObjects) {
     object->Draw();
   }
+  for (const std::unique_ptr<Object3d> &object : needleObjects) {
+    object->Draw();
+  }
   sceneEditor->Draw();
   for (const MovingPlatform &platform : movingPlatforms) {
     platform.object->Draw();
@@ -402,12 +457,15 @@ void GamePlayScene::Finalize() {
   enemies.clear();
   player.reset();
   movingPlatforms.clear();
+  hazardColliders.clear();
+  needleObjects.clear();
   goalObjects.clear();
   blockObjects.clear();
   skyBox.reset();
   camera.reset();
   playerModel.reset();
   enemyModel.reset();
+  needleModel.reset();
   goalModel.reset();
   blockModel.reset();
   mapChipField.reset();

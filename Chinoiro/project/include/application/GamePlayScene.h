@@ -4,13 +4,13 @@
 #include <vector>
 
 #include "BaseScene.h"
+#include "MapChipField.h"
 #include "Vector.h"
 
 class Camera;
 class DirectXCommon;
 class Enemy;
 class Input;
-class MapChipField;
 class Model;
 class ModelCommon;
 class Object3d;
@@ -49,6 +49,7 @@ private:
   void GenerateEnemies();
   void RegisterEditorObjects();
   void CheckPlayerEnemyCollisions();
+  bool CheckPlayerHazardCollision() const;
   void RespawnPlayer();
   void UpdateCamera();
 
@@ -61,6 +62,7 @@ private:
   std::unique_ptr<MapChipField> mapChipField;
   std::unique_ptr<Model> blockModel;
   std::unique_ptr<Model> goalModel;
+  std::unique_ptr<Model> needleModel;
   std::unique_ptr<Model> playerModel;
   std::unique_ptr<Model> enemyModel;
   std::unique_ptr<Camera> camera;
@@ -73,7 +75,9 @@ private:
 
   std::vector<std::unique_ptr<Object3d>> blockObjects;
   std::vector<std::unique_ptr<Object3d>> goalObjects;
+  std::vector<std::unique_ptr<Object3d>> needleObjects;
   std::vector<MovingPlatform> movingPlatforms;
+  std::vector<MapChipRect> hazardColliders;
 
   Vector::Vector3 cameraPosition{20.0f, 16.0f, -45.0f};
   float movingPlatformTime = 0.0f;
