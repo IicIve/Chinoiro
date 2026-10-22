@@ -64,6 +64,7 @@ private:
                  const Vector::Vector3 &scale);
   void SaveScene();
   void DrawTileMapEditor();
+  void DrawWorldGridEditor();
   void SetMode(Mode newMode);
 
   Camera *camera = nullptr;
@@ -81,6 +82,7 @@ private:
   bool visible = true;
   bool pauseGame = false;
   bool tileMapDirty = false;
+  bool worldGridEditing = true;
   int selectedTileType = 1;
   int tileMapWidth = 100;
   int tileMapHeight = 20;

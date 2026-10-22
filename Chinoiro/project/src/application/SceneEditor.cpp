@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cctype>
+#include <cmath>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -17,6 +18,7 @@
 #include "Camera.h"
 #include "Input.h"
 #include "MapChipField.h"
+#include "MathFunc.h"
 #include "Model.h"
 #include "ModelManager.h"
 #include "Object3d.h"
@@ -28,6 +30,83 @@ constexpr char kScenePath[] = "resources/editor_scene.json";
 constexpr char kMapPath[] = "resources/maptip.csv";
 constexpr float kRadiansToDegrees = 180.0f / 3.14159265358979323846f;
 constexpr float kDegreesToRadians = 3.14159265358979323846f / 180.0f;
+
+#ifdef USE_IMGUI
+Vector::Vector4 TransformHomogeneous(const Vector::Vector4 &vector,
+                                     const Matrix::Matrix4x4 &matrix) {
+  return {
+      vector.x * matrix.m[0][0] + vector.y * matrix.m[1][0] +
+          vector.z * matrix.m[2][0] + vector.w * matrix.m[3][0],
+      vector.x * matrix.m[0][1] + vector.y * matrix.m[1][1] +
+          vector.z * matrix.m[2][1] + vector.w * matrix.m[3][1],
+      vector.x * matrix.m[0][2] + vector.y * matrix.m[1][2] +
+          vector.z * matrix.m[2][2] + vector.w * matrix.m[3][2],
+      vector.x * matrix.m[0][3] + vector.y * matrix.m[1][3] +
+          vector.z * matrix.m[2][3] + vector.w * matrix.m[3][3],
+  };
+}
+
+bool WorldToScreen(const Vector::Vector3 &worldPosition,
+                   const Camera &camera, const ImVec2 &displaySize,
+                   ImVec2 &screenPosition) {
+  const Vector::Vector4 clip = TransformHomogeneous(
+      {worldPosition.x, worldPosition.y, worldPosition.z, 1.0f},
+      camera.GetViewProjectionMatrix());
+  if (clip.w <= 0.0001f) {
+    return false;
+  }
+
+  const float inverseW = 1.0f / clip.w;
+  screenPosition = {
+      (clip.x * inverseW + 1.0f) * 0.5f * displaySize.x,
+      (1.0f - clip.y * inverseW) * 0.5f * displaySize.y,
+  };
+  return true;
+}
+
+bool ScreenToWorldPlane(const ImVec2 &screenPosition,
+                        const ImVec2 &displaySize, const Camera &camera,
+                        Vector::Vector3 &worldPosition) {
+  if (displaySize.x <= 0.0f || displaySize.y <= 0.0f) {
+    return false;
+  }
+
+  const float ndcX = screenPosition.x / displaySize.x * 2.0f - 1.0f;
+  const float ndcY = 1.0f - screenPosition.y / displaySize.y * 2.0f;
+  const Matrix::Matrix4x4 inverseViewProjection =
+      Inverse(camera.GetViewProjectionMatrix());
+  Vector::Vector4 nearPoint = TransformHomogeneous(
+      {ndcX, ndcY, 0.0f, 1.0f}, inverseViewProjection);
+  Vector::Vector4 farPoint = TransformHomogeneous(
+      {ndcX, ndcY, 1.0f, 1.0f}, inverseViewProjection);
+  if (std::abs(nearPoint.w) <= 0.0001f ||
+      std::abs(farPoint.w) <= 0.0001f) {
+    return false;
+  }
+
+  nearPoint.x /= nearPoint.w;
+  nearPoint.y /= nearPoint.w;
+  nearPoint.z /= nearPoint.w;
+  farPoint.x /= farPoint.w;
+  farPoint.y /= farPoint.w;
+  farPoint.z /= farPoint.w;
+  const float directionZ = farPoint.z - nearPoint.z;
+  if (std::abs(directionZ) <= 0.0001f) {
+    return false;
+  }
+
+  const float distance = -nearPoint.z / directionZ;
+  if (distance < 0.0f) {
+    return false;
+  }
+  worldPosition = {
+      nearPoint.x + (farPoint.x - nearPoint.x) * distance,
+      nearPoint.y + (farPoint.y - nearPoint.y) * distance,
+      0.0f,
+  };
+  return true;
+}
+#endif
 
 } // namespace
 
@@ -371,70 +450,77 @@ void SceneEditor::DrawTileMapEditor() {
                      static_cast<int>(MapChipType::Blank));
   ImGui::TextDisabled("Left drag: paint  |  Right drag: erase");
   ImGui::TextDisabled("Hole/Needle: touching them respawns the player");
+  ImGui::Checkbox("Edit directly in Game View", &worldGridEditing);
 
-  constexpr float kCellSize = 22.0f;
-  const float canvasWidth =
-      kCellSize * static_cast<float>(mapChipField->GetNumBlockHorizontal());
-  const float canvasHeight =
-      kCellSize * static_cast<float>(mapChipField->GetNumBlockVertical());
+  if (worldGridEditing) {
+    ImGui::TextWrapped(
+        "The grid is shown over the game. Move this window aside, then "
+        "paint directly in the Game View.");
+  } else {
+    constexpr float kCellSize = 22.0f;
+    const float canvasWidth =
+        kCellSize * static_cast<float>(mapChipField->GetNumBlockHorizontal());
+    const float canvasHeight =
+        kCellSize * static_cast<float>(mapChipField->GetNumBlockVertical());
 
-  ImGui::BeginChild("TileMapCanvas", ImVec2(0.0f, 0.0f), true,
-                    ImGuiWindowFlags_HorizontalScrollbar);
-  const ImVec2 origin = ImGui::GetCursorScreenPos();
-  ImGui::InvisibleButton("##TileMapGrid", ImVec2(canvasWidth, canvasHeight),
-                         ImGuiButtonFlags_MouseButtonLeft |
-                             ImGuiButtonFlags_MouseButtonRight);
-  ImDrawList *drawList = ImGui::GetWindowDrawList();
+    ImGui::BeginChild("TileMapCanvas", ImVec2(0.0f, 0.0f), true,
+                      ImGuiWindowFlags_HorizontalScrollbar);
+    const ImVec2 origin = ImGui::GetCursorScreenPos();
+    ImGui::InvisibleButton("##TileMapGrid", ImVec2(canvasWidth, canvasHeight),
+                           ImGuiButtonFlags_MouseButtonLeft |
+                               ImGuiButtonFlags_MouseButtonRight);
+    ImDrawList *drawList = ImGui::GetWindowDrawList();
 
-  for (uint32_t y = 0; y < mapChipField->GetNumBlockVertical(); ++y) {
-    for (uint32_t x = 0; x < mapChipField->GetNumBlockHorizontal(); ++x) {
-      const ImVec2 cellMin(origin.x + static_cast<float>(x) * kCellSize,
-                           origin.y + static_cast<float>(y) * kCellSize);
-      const ImVec2 cellMax(cellMin.x + kCellSize, cellMin.y + kCellSize);
-      ImU32 fillColor = IM_COL32(35, 38, 45, 255);
-      switch (mapChipField->GetMapChipTypeByIndex(x, y)) {
-      case MapChipType::Block:
-        fillColor = IM_COL32(90, 150, 85, 255);
-        break;
-      case MapChipType::Goal:
-        fillColor = IM_COL32(245, 190, 45, 255);
-        break;
-      case MapChipType::MovingPlatform:
-        fillColor = IM_COL32(70, 155, 220, 255);
-        break;
-      case MapChipType::Hole:
-        // Holes are invisible in-game, but remain visible while editing.
-        fillColor = IM_COL32(150, 70, 180, 255);
-        break;
-      case MapChipType::Needle:
-        fillColor = IM_COL32(205, 75, 65, 255);
-        break;
-      case MapChipType::Blank:
-        break;
+    for (uint32_t y = 0; y < mapChipField->GetNumBlockVertical(); ++y) {
+      for (uint32_t x = 0; x < mapChipField->GetNumBlockHorizontal(); ++x) {
+        const ImVec2 cellMin(origin.x + static_cast<float>(x) * kCellSize,
+                             origin.y + static_cast<float>(y) * kCellSize);
+        const ImVec2 cellMax(cellMin.x + kCellSize, cellMin.y + kCellSize);
+        ImU32 fillColor = IM_COL32(35, 38, 45, 255);
+        switch (mapChipField->GetMapChipTypeByIndex(x, y)) {
+        case MapChipType::Block:
+          fillColor = IM_COL32(90, 150, 85, 255);
+          break;
+        case MapChipType::Goal:
+          fillColor = IM_COL32(245, 190, 45, 255);
+          break;
+        case MapChipType::MovingPlatform:
+          fillColor = IM_COL32(70, 155, 220, 255);
+          break;
+        case MapChipType::Hole:
+          // Holes are invisible in-game, but remain visible while editing.
+          fillColor = IM_COL32(150, 70, 180, 255);
+          break;
+        case MapChipType::Needle:
+          fillColor = IM_COL32(205, 75, 65, 255);
+          break;
+        case MapChipType::Blank:
+          break;
+        }
+        drawList->AddRectFilled(cellMin, cellMax, fillColor);
+        drawList->AddRect(cellMin, cellMax, IM_COL32(75, 80, 90, 255));
       }
-      drawList->AddRectFilled(cellMin, cellMax, fillColor);
-      drawList->AddRect(cellMin, cellMax, IM_COL32(75, 80, 90, 255));
     }
-  }
 
-  if (ImGui::IsItemHovered() &&
-      (ImGui::IsMouseDown(ImGuiMouseButton_Left) ||
-       ImGui::IsMouseDown(ImGuiMouseButton_Right))) {
-    const ImVec2 mousePosition = ImGui::GetIO().MousePos;
-    const int x = static_cast<int>((mousePosition.x - origin.x) / kCellSize);
-    const int y = static_cast<int>((mousePosition.y - origin.y) / kCellSize);
-    if (x >= 0 && y >= 0 &&
-        x < static_cast<int>(mapChipField->GetNumBlockHorizontal()) &&
-        y < static_cast<int>(mapChipField->GetNumBlockVertical())) {
-      const MapChipType paintType =
-          ImGui::IsMouseDown(ImGuiMouseButton_Right)
-              ? MapChipType::Blank
-              : static_cast<MapChipType>(selectedTileType);
-      tileMapDirty |= mapChipField->SetMapChipTypeByIndex(
-          static_cast<uint32_t>(x), static_cast<uint32_t>(y), paintType);
+    if (ImGui::IsItemHovered() &&
+        (ImGui::IsMouseDown(ImGuiMouseButton_Left) ||
+         ImGui::IsMouseDown(ImGuiMouseButton_Right))) {
+      const ImVec2 mousePosition = ImGui::GetIO().MousePos;
+      const int x = static_cast<int>((mousePosition.x - origin.x) / kCellSize);
+      const int y = static_cast<int>((mousePosition.y - origin.y) / kCellSize);
+      if (x >= 0 && y >= 0 &&
+          x < static_cast<int>(mapChipField->GetNumBlockHorizontal()) &&
+          y < static_cast<int>(mapChipField->GetNumBlockVertical())) {
+        const MapChipType paintType =
+            ImGui::IsMouseDown(ImGuiMouseButton_Right)
+                ? MapChipType::Blank
+                : static_cast<MapChipType>(selectedTileType);
+        tileMapDirty |= mapChipField->SetMapChipTypeByIndex(
+            static_cast<uint32_t>(x), static_cast<uint32_t>(y), paintType);
+      }
     }
+    ImGui::EndChild();
   }
-  ImGui::EndChild();
   ImGui::EndDisabled();
 
   if (ImGui::BeginPopupModal("Confirm Stage Resize", nullptr,
@@ -464,6 +550,134 @@ void SceneEditor::DrawTileMapEditor() {
       onMapChanged();
     }
     status = "Tile map changed (save with Ctrl+S)";
+  }
+#endif
+}
+
+void SceneEditor::DrawWorldGridEditor() {
+#ifdef USE_IMGUI
+  if (mode != Mode::Edit || !worldGridEditing || !mapChipField || !camera) {
+    return;
+  }
+
+  const ImGuiIO &io = ImGui::GetIO();
+  ImDrawList *drawList = ImGui::GetBackgroundDrawList();
+  const float mapLeft = -MapChipField::kBlockWidth * 0.5f;
+  const float mapRight =
+      MapChipField::kBlockWidth *
+          static_cast<float>(mapChipField->GetNumBlockHorizontal()) -
+      MapChipField::kBlockWidth * 0.5f;
+  const float mapBottom = -MapChipField::kBlockHeight * 0.5f;
+  const float mapTop =
+      MapChipField::kBlockHeight *
+          static_cast<float>(mapChipField->GetNumBlockVertical()) -
+      MapChipField::kBlockHeight * 0.5f;
+
+  for (uint32_t x = 0; x <= mapChipField->GetNumBlockHorizontal(); ++x) {
+    const float worldX =
+        mapLeft + MapChipField::kBlockWidth * static_cast<float>(x);
+    ImVec2 lineStart;
+    ImVec2 lineEnd;
+    if (WorldToScreen({worldX, mapBottom, 0.0f}, *camera, io.DisplaySize,
+                      lineStart) &&
+        WorldToScreen({worldX, mapTop, 0.0f}, *camera, io.DisplaySize,
+                      lineEnd)) {
+      drawList->AddLine(lineStart, lineEnd, IM_COL32(110, 190, 230, 85));
+    }
+  }
+  for (uint32_t y = 0; y <= mapChipField->GetNumBlockVertical(); ++y) {
+    const float worldY =
+        mapBottom + MapChipField::kBlockHeight * static_cast<float>(y);
+    ImVec2 lineStart;
+    ImVec2 lineEnd;
+    if (WorldToScreen({mapLeft, worldY, 0.0f}, *camera, io.DisplaySize,
+                      lineStart) &&
+        WorldToScreen({mapRight, worldY, 0.0f}, *camera, io.DisplaySize,
+                      lineEnd)) {
+      drawList->AddLine(lineStart, lineEnd, IM_COL32(110, 190, 230, 85));
+    }
+  }
+
+  // Invisible hazards remain visible as translucent cells while editing.
+  for (uint32_t y = 0; y < mapChipField->GetNumBlockVertical(); ++y) {
+    for (uint32_t x = 0; x < mapChipField->GetNumBlockHorizontal(); ++x) {
+      const MapChipType type = mapChipField->GetMapChipTypeByIndex(x, y);
+      if (type != MapChipType::Hole && type != MapChipType::Needle) {
+        continue;
+      }
+      const MapChipRect rect = mapChipField->GetRectByIndex(x, y);
+      ImVec2 topLeft;
+      ImVec2 topRight;
+      ImVec2 bottomRight;
+      ImVec2 bottomLeft;
+      if (!WorldToScreen({rect.left, rect.top, 0.0f}, *camera,
+                         io.DisplaySize, topLeft) ||
+          !WorldToScreen({rect.right, rect.top, 0.0f}, *camera,
+                         io.DisplaySize, topRight) ||
+          !WorldToScreen({rect.right, rect.bottom, 0.0f}, *camera,
+                         io.DisplaySize, bottomRight) ||
+          !WorldToScreen({rect.left, rect.bottom, 0.0f}, *camera,
+                         io.DisplaySize, bottomLeft)) {
+        continue;
+      }
+      const ImU32 color = type == MapChipType::Hole
+                              ? IM_COL32(150, 70, 180, 105)
+                              : IM_COL32(220, 65, 55, 115);
+      drawList->AddQuadFilled(topLeft, topRight, bottomRight, bottomLeft,
+                              color);
+    }
+  }
+
+  const bool leftMouseDown = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+  const bool rightMouseDown = ImGui::IsMouseDown(ImGuiMouseButton_Right);
+  const bool paintInputStartedOnUI =
+      (leftMouseDown && io.MouseDownOwned[ImGuiMouseButton_Left]) ||
+      (rightMouseDown && io.MouseDownOwned[ImGuiMouseButton_Right]);
+  const bool popupOpen =
+      ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopup);
+  if (popupOpen || paintInputStartedOnUI ||
+      ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow)) {
+    return;
+  }
+
+  Vector::Vector3 worldPosition;
+  if (!ScreenToWorldPlane(io.MousePos, io.DisplaySize, *camera,
+                          worldPosition)) {
+    return;
+  }
+  const MapChipIndex index =
+      mapChipField->GetMapChipIndexSetByPosition(worldPosition);
+  if (index.x >= mapChipField->GetNumBlockHorizontal() ||
+      index.y >= mapChipField->GetNumBlockVertical()) {
+    return;
+  }
+
+  const MapChipRect hoveredRect =
+      mapChipField->GetRectByIndex(index.x, index.y);
+  ImVec2 topLeft;
+  ImVec2 topRight;
+  ImVec2 bottomRight;
+  ImVec2 bottomLeft;
+  if (WorldToScreen({hoveredRect.left, hoveredRect.top, 0.0f}, *camera,
+                    io.DisplaySize, topLeft) &&
+      WorldToScreen({hoveredRect.right, hoveredRect.top, 0.0f}, *camera,
+                    io.DisplaySize, topRight) &&
+      WorldToScreen({hoveredRect.right, hoveredRect.bottom, 0.0f}, *camera,
+                    io.DisplaySize, bottomRight) &&
+      WorldToScreen({hoveredRect.left, hoveredRect.bottom, 0.0f}, *camera,
+                    io.DisplaySize, bottomLeft)) {
+    drawList->AddQuadFilled(topLeft, topRight, bottomRight, bottomLeft,
+                            IM_COL32(255, 220, 80, 90));
+    drawList->AddQuad(topLeft, topRight, bottomRight, bottomLeft,
+                      IM_COL32(255, 235, 120, 255), 2.0f);
+  }
+
+  if (leftMouseDown || rightMouseDown) {
+    const MapChipType paintType =
+        rightMouseDown ? MapChipType::Blank
+                       : static_cast<MapChipType>(selectedTileType);
+    tileMapDirty |= mapChipField->SetMapChipTypeByIndex(
+        index.x, index.y, paintType);
   }
 #endif
 }
@@ -708,6 +922,7 @@ void SceneEditor::DrawUI(const Vector::Vector3 &spawnPosition) {
             : std::min(objectToDelete, static_cast<int>(objects.size()) - 1);
     status = "Object deleted";
   }
+  DrawWorldGridEditor();
 #else
   (void)spawnPosition;
 #endif

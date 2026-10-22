@@ -157,6 +157,7 @@ void GamePlayScene::GenerateMapObjects() {
   needleObjects.clear();
   movingPlatforms.clear();
   hazardColliders.clear();
+  goalColliders.clear();
 
   for (uint32_t y = 0; y < mapChipField->GetNumBlockVertical(); ++y) {
     for (uint32_t x = 0; x < mapChipField->GetNumBlockHorizontal(); ++x) {
@@ -171,6 +172,7 @@ void GamePlayScene::GenerateMapObjects() {
 
       case MapChipType::Goal:
         goalObjects.emplace_back(CreateMapObject(goalModel.get(), position));
+        goalColliders.emplace_back(mapChipField->GetRectByIndex(x, y));
         break;
 
       case MapChipType::MovingPlatform: {
@@ -273,6 +275,21 @@ bool GamePlayScene::CheckPlayerHazardCollision() const {
         playerAABB.max.x > hazardRect.left &&
         playerAABB.min.y < hazardRect.top &&
         playerAABB.max.y > hazardRect.bottom;
+    if (isOverlapping) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool GamePlayScene::CheckPlayerGoalCollision() const {
+  const PlayerAABB playerAABB = player->GetAABB();
+  for (const MapChipRect &goalRect : goalColliders) {
+    const bool isOverlapping =
+        playerAABB.min.x < goalRect.right &&
+        playerAABB.max.x > goalRect.left &&
+        playerAABB.min.y < goalRect.top &&
+        playerAABB.max.y > goalRect.bottom;
     if (isOverlapping) {
       return true;
     }
@@ -409,6 +426,10 @@ void GamePlayScene::Update() {
   }
 
   player->Update();
+  if (CheckPlayerGoalCollision()) {
+    sceneManager->ChangeScene(SceneType::Title);
+    return;
+  }
   if (CheckPlayerHazardCollision()) {
     RespawnPlayer();
   }
@@ -499,6 +520,7 @@ void GamePlayScene::Finalize() {
   player.reset();
   movingPlatforms.clear();
   hazardColliders.clear();
+  goalColliders.clear();
   needleObjects.clear();
   goalObjects.clear();
   blockObjects.clear();

@@ -51,6 +51,7 @@ private:
   void RegisterEditorObjects();
   void CheckPlayerEnemyCollisions();
   bool CheckPlayerHazardCollision() const;
+  bool CheckPlayerGoalCollision() const;
   void RespawnPlayer();
   void UpdateCamera();
 
@@ -80,6 +81,7 @@ private:
   std::vector<std::unique_ptr<Object3d>> needleObjects;
   std::vector<MovingPlatform> movingPlatforms;
   std::vector<MapChipRect> hazardColliders;
+  std::vector<MapChipRect> goalColliders;
 
   Vector::Vector3 cameraPosition{20.0f, 16.0f, -45.0f};
   float movingPlatformTime = 0.0f;
