@@ -13,6 +13,7 @@
 #include "Model.h"
 #include "Object3d.h"
 #include "Object3dCommon.h"
+#include "ParticleManager.h"
 #include "Player.h"
 #include "SceneEditor.h"
 #include "SceneManager.h"
@@ -51,6 +52,8 @@ GamePlayScene::~GamePlayScene() = default;
 void GamePlayScene::Initialize() {
   fadeAlpha = 0.0f;
   introCameraProgress = 0.0f;
+  introPlayerSpinProgress = 0.0f;
+  introSparkEmitted = false;
 
   mapChipField = std::make_unique<MapChipField>();
   mapChipField->LoadMapChipCsv("resources/maptip.csv");
@@ -107,6 +110,19 @@ void GamePlayScene::Initialize() {
   player->Initialize(playerModel.get(), camera.get(), input,
                      mapChipField.get(), playerPosition);
   player->SetRenderRotationY(std::numbers::pi_v<float>);
+
+  introSparkParticles = std::make_unique<ParticleManager>();
+  introSparkParticles->Initialize(
+      dxCommon, srvManager, camera.get(), "resources/circle.png",
+      ParticleManager::PrimitiveType::Plane,
+      ParticleManager::BlendMode::Add);
+  introSparkParticles->SetPlaneSize(0.5f, 0.5f);
+  introSparkParticles->SetUniformScaleRange(2.5f, 3.5f);
+  introSparkParticles->SetScaleVelocityRange(-1.0f, -0.55f);
+  introSparkParticles->SetColor({1.0f, 0.78f, 0.16f, 1.0f});
+  introSparkParticles->SetLifeTimeRange(0.55f, 0.9f);
+  introSparkParticles->SetSpeedRange(0.8f, 2.0f);
+  introSparkParticles->SetEmitCount(14);
 
   // タイトル側と同じく顔の直前から開始する。
   camera->SetRotate({0.0f, 0.0f, 0.0f});
@@ -301,14 +317,21 @@ void GamePlayScene::UpdateCamera() {
 }
 
 void GamePlayScene::Update() {
-  if (introCameraProgress < 1.0f) {
+  if (introCameraProgress < 1.0f || introPlayerSpinProgress < 1.0f) {
     if (input->TriggerKey(DIK_ESCAPE)) {
       sceneManager->ChangeScene(SceneType::Title);
       return;
     }
 
-    introCameraProgress =
-        (std::min)(1.0f, introCameraProgress + 0.9f / 60.0f);
+    if (introCameraProgress < 1.0f) {
+      introCameraProgress =
+          (std::min)(1.0f, introCameraProgress + 0.9f / 60.0f);
+    } else {
+      // カメラが引ききってから、プレイヤーの回転を始める。
+      introPlayerSpinProgress =
+          (std::min)(1.0f, introPlayerSpinProgress + 1.4f / 60.0f);
+    }
+
     const float cameraProgress = introCameraProgress * introCameraProgress *
                                  (3.0f - 2.0f * introCameraProgress);
     const Vector::Vector3 &playerPosition = player->GetPosition();
@@ -322,10 +345,25 @@ void GamePlayScene::Update() {
     camera->SetRotate({0.0f, 0.0f, 0.0f});
     camera->Update();
 
+    // 正面向きから時計回りに1回転し、最後の1/4回転で
+    // ゲーム中の進行方向（右）へ向きを揃える。
+    const float spinProgress =
+        introPlayerSpinProgress * introPlayerSpinProgress *
+        (3.0f - 2.0f * introPlayerSpinProgress);
     const float playerRotation =
         std::numbers::pi_v<float> -
-        std::numbers::pi_v<float> * 0.5f * cameraProgress;
+        std::numbers::pi_v<float> * 2.5f * spinProgress;
     player->SetRenderRotationY(playerRotation);
+
+    // 1回転した瞬間に、プレイヤーの周りへ光粒を一度だけ放出する。
+    if (!introSparkEmitted && spinProgress >= 0.8f) {
+      Vector::Vector3 sparkPosition = playerPosition;
+      sparkPosition.y += 0.6f;
+      sparkPosition.z -= 0.2f;
+      introSparkParticles->Emit(sparkPosition);
+      introSparkEmitted = true;
+    }
+    introSparkParticles->Update(1.0f / 60.0f);
     skyBox->Update(camera.get());
 
     for (const std::unique_ptr<Object3d> &object : blockObjects) {
@@ -414,6 +452,7 @@ void GamePlayScene::Update() {
   fadeSprite->Update();
   backToTitleSprite->SetColor({1.0f, 1.0f, 1.0f, 0.9f});
   backToTitleSprite->Update();
+  introSparkParticles->Update(1.0f / 60.0f);
 }
 
 void GamePlayScene::Draw() {
@@ -439,6 +478,7 @@ void GamePlayScene::Draw() {
   for (const std::unique_ptr<Enemy> &enemy : enemies) {
     enemy->Draw();
   }
+  introSparkParticles->Draw();
 
   SpriteCommon::GetInstance()->CreatePrimitiveTopology();
   if (!sceneEditor->IsEditMode()) {
@@ -452,6 +492,7 @@ void GamePlayScene::Finalize() {
     sceneEditor->Finalize();
     sceneEditor.reset();
   }
+  introSparkParticles.reset();
   backToTitleSprite.reset();
   fadeSprite.reset();
   enemies.clear();
