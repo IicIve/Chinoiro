@@ -334,6 +334,16 @@ void Player::SetRenderRotationY(float rotationY) {
   UpdateRenderObject();
 }
 
+void Player::SetDeathAnimationTransform(
+    const Vector::Vector3 &renderPosition, float rotationZ) {
+  Vector::Vector3 renderRotation = rotation;
+  renderRotation.z = rotationZ;
+  object->SetTranslate(renderPosition);
+  object->SetRotate(renderRotation);
+  object->SetScale(scale);
+  object->Update();
+}
+
 void Player::SetPosition(const Vector::Vector3 &newPosition) {
   position = newPosition;
   previousPosition = newPosition;

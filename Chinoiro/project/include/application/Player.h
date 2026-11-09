@@ -33,6 +33,8 @@ public:
   void Respawn();
   void SetPosition(const Vector::Vector3 &newPosition);
   void SetRenderRotationY(float rotationY);
+  void SetDeathAnimationTransform(const Vector::Vector3 &renderPosition,
+                                  float rotationZ);
   void ResolveMovingPlatformCollision(
       const MapChipRect &platformRect,
       const Vector::Vector3 &platformMoveDelta);

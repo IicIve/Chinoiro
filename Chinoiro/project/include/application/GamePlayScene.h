@@ -51,6 +51,9 @@ private:
   void RegisterEditorObjects();
   void CheckPlayerEnemyCollisions();
   bool CheckPlayerHazardCollision() const;
+  void BeginPlayerDeath(const Vector::Vector3 &enemyPosition);
+  void ResolveDeathAnimationMapCollision(
+      const Vector::Vector3 &movement);
   void RespawnPlayer();
   void UpdateCamera();
 
@@ -71,6 +74,9 @@ private:
   std::unique_ptr<Sprite> fadeSprite;
   std::unique_ptr<Sprite> backToTitleSprite;
   std::unique_ptr<ParticleManager> introSparkParticles;
+  std::unique_ptr<ParticleManager> deathSmokeParticles;
+  std::unique_ptr<ParticleManager> deathBurstParticles;
+  std::unique_ptr<ParticleManager> deathSparkParticles;
   std::unique_ptr<Player> player;
   std::unique_ptr<SceneEditor> sceneEditor;
   std::vector<std::unique_ptr<Enemy>> enemies;
@@ -81,10 +87,23 @@ private:
   std::vector<MovingPlatform> movingPlatforms;
   std::vector<MapChipRect> hazardColliders;
 
-  Vector::Vector3 cameraPosition{20.0f, 16.0f, -45.0f};
+  Vector::Vector3 cameraPosition{20.0f, 16.0f, -50.0f};
   float movingPlatformTime = 0.0f;
   float fadeAlpha = 0.0f;
   float introCameraProgress = 0.0f;
   float introPlayerSpinProgress = 0.0f;
+  float playerDeathTimer = 0.0f;
+  float deathSmokeTimer = 0.0f;
+  float deathRotationZ = 0.0f;
+  float cameraShakeTimer = 0.0f;
   bool introSparkEmitted = false;
+  bool isPlayerDying = false;
+  bool hasPlayerExploded = false;
+
+  Vector::Vector3 deathAnimationPosition{};
+  Vector::Vector3 deathAnimationVelocity{};
+
+  static constexpr float kKnockbackDuration = 0.72f;
+  static constexpr float kExplosionDuration = 0.55f;
+  static constexpr float kCameraShakeDuration = 0.28f;
 };
