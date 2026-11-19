@@ -87,10 +87,22 @@ void Player::UpdateMovement() {
     }
   }
 
-  if (input->TriggerKey(DIK_UP) && jumpCount < kMaxJumpCount) {
-    velocity.y = kJumpSpeed;
-    ++jumpCount;
-    onGround = false;
+  if (input->TriggerKey(DIK_UP)) {
+    const int touchingWallSide = onGround ? 0 : GetTouchingWallSide();
+    if (touchingWallSide != 0) {
+      // -1は左壁、+1は右壁。壁と反対方向へ押し出す。
+      velocity.x = -static_cast<float>(touchingWallSide) *
+                   kWallJumpHorizontalSpeed;
+      velocity.y = kJumpSpeed;
+      direction = touchingWallSide < 0 ? Direction::Right : Direction::Left;
+      // 壁ジャンプ後は通常の空中ジャンプを1回残す。
+      jumpCount = 1;
+      onGround = false;
+    } else if (jumpCount < kMaxJumpCount) {
+      velocity.y = kJumpSpeed;
+      ++jumpCount;
+      onGround = false;
+    }
   }
 
   if (!onGround) {
@@ -108,7 +120,12 @@ void Player::BeginAttack() {
 }
 
 void Player::UpdateAttackAction() {
-  if (!onGround) {
+  // 予備動作と突進中は空中でも重力をかけず、ダッシュが
+  // 斜め下へ曲がらないよう水平速度を維持する。
+  if (attackPhase == AttackPhase::Charge ||
+      attackPhase == AttackPhase::Rush) {
+    velocity.y = 0.0f;
+  } else if (!onGround) {
     velocity.y = std::max(velocity.y - kGravity, -kMaxFallSpeed);
   } else if (velocity.y < 0.0f) {
     velocity.y = 0.0f;
@@ -174,6 +191,23 @@ bool Player::IsAttacking() const {
   return attackPhase == AttackPhase::Rush;
 }
 
+Vector::Vector3 Player::GetHeadDecorationPosition() const {
+  // player.objの三角飾り先端（ローカル座標で約 y=3.8, z=-1.15）を
+  // プレイヤーの向きと現在の変形に合わせてワールド座標へ移す。
+  constexpr float kLocalX = 0.0f;
+  constexpr float kLocalY = 3.8f;
+  constexpr float kLocalZ = -1.15f;
+  const float scaledX = kLocalX * scale.x;
+  const float scaledZ = kLocalZ * scale.z;
+  const float sinY = std::sin(rotation.y);
+  const float cosY = std::cos(rotation.y);
+  return {
+      position.x + scaledX * cosY + scaledZ * sinY,
+      position.y - kHalfHeight + kLocalY * scale.y,
+      position.z - scaledX * sinY + scaledZ * cosY - 0.15f,
+  };
+}
+
 bool Player::OverlapsBlock(const PlayerAABB &aabb, uint32_t x,
                            uint32_t y) const {
   if (mapChipField->GetMapChipTypeByIndex(x, y) != MapChipType::Block) {
@@ -186,7 +220,19 @@ bool Player::OverlapsBlock(const PlayerAABB &aabb, uint32_t x,
 }
 
 void Player::ResolveHorizontalCollision(float moveX) {
+  const MapChipRect mapRect = mapChipField->GetMapRect();
+  const float minPlayerX = mapRect.left + kHalfWidth + kCollisionSkin;
+  const float maxPlayerX = mapRect.right - kHalfWidth - kCollisionSkin;
+  const auto clampToMap = [minPlayerX, maxPlayerX,
+                           &mapRect](float x) {
+    if (minPlayerX > maxPlayerX) {
+      return (mapRect.left + mapRect.right) / 2.0f;
+    }
+    return std::clamp(x, minPlayerX, maxPlayerX);
+  };
+
   if (moveX == 0.0f) {
+    position.x = clampToMap(position.x);
     return;
   }
 
@@ -219,7 +265,11 @@ void Player::ResolveHorizontalCollision(float moveX) {
     }
   }
 
-  position.x = resolvedX;
+  const float boundedX = clampToMap(resolvedX);
+  if (boundedX != resolvedX) {
+    velocity.x = 0.0f;
+  }
+  position.x = boundedX;
 }
 
 void Player::ResolveVerticalCollision(float moveY) {
@@ -276,6 +326,32 @@ bool Player::IsStandingOnBlock() const {
     }
   }
   return false;
+}
+
+int Player::GetTouchingWallSide() const {
+  const PlayerAABB playerAABB = GetAABB();
+
+  PlayerAABB leftProbe = playerAABB;
+  leftProbe.min.x -= kWallProbeDistance;
+  leftProbe.max.x -= kWallProbeDistance;
+
+  PlayerAABB rightProbe = playerAABB;
+  rightProbe.min.x += kWallProbeDistance;
+  rightProbe.max.x += kWallProbeDistance;
+
+  bool touchingLeftWall = false;
+  bool touchingRightWall = false;
+  for (uint32_t y = 0; y < mapChipField->GetNumBlockVertical(); ++y) {
+    for (uint32_t x = 0; x < mapChipField->GetNumBlockHorizontal(); ++x) {
+      touchingLeftWall |= OverlapsBlock(leftProbe, x, y);
+      touchingRightWall |= OverlapsBlock(rightProbe, x, y);
+    }
+  }
+
+  if (touchingLeftWall == touchingRightWall) {
+    return 0;
+  }
+  return touchingLeftWall ? -1 : 1;
 }
 
 void Player::Update() {
@@ -338,7 +414,9 @@ void Player::SetDeathAnimationTransform(
     const Vector::Vector3 &renderPosition, float rotationZ) {
   Vector::Vector3 renderRotation = rotation;
   renderRotation.z = rotationZ;
-  object->SetTranslate(renderPosition);
+  Vector::Vector3 modelPosition = renderPosition;
+  modelPosition.y -= kHalfHeight;
+  object->SetTranslate(modelPosition);
   object->SetRotate(renderRotation);
   object->SetScale(scale);
   object->Update();
@@ -381,7 +459,9 @@ void Player::ResolveMovingPlatformCollision(
 }
 
 void Player::UpdateRenderObject() {
-  object->SetTranslate(position);
+  Vector::Vector3 renderPosition = position;
+  renderPosition.y -= kHalfHeight;
+  object->SetTranslate(renderPosition);
   object->SetRotate(rotation);
   object->SetScale(scale);
   object->Update();

@@ -31,6 +31,7 @@ public:
 	void Update(float deltaTime);
 	void Draw();
 	void Emit(const Vector3& position);
+	void Clear() { particles_.clear(); }
 	Particle MakeNewParticle(std::mt19937& randomEngine);
 
 	void SetRotate(float rotate);
@@ -50,6 +51,7 @@ public:
 	void SetLifeTimeRange(float minLifeTime, float maxLifeTime);
 	void SetSpeed(float speed);
 	void SetSpeedRange(float minSpeed, float maxSpeed);
+	void SetDirectionRange(const Vector3& minDirection, const Vector3& maxDirection);
 	void SetEmitCount(uint32_t emitCount);
 
 	std::size_t GetParticleCount() const { return particles_.size(); }
@@ -109,6 +111,8 @@ private:
 	float maxLifeTime_ = 1.0f;
 	float minSpeed_ = 2.0f;
 	float maxSpeed_ = 4.0f;
+	Vector3 minDirection_ = { -1.0f, -1.0f, -1.0f };
+	Vector3 maxDirection_ = { 1.0f, 1.0f, 1.0f };
 	uint32_t emitCount_ = 3;
 
 	std::list<Particle> particles_;

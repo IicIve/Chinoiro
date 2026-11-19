@@ -51,6 +51,7 @@ public:
   MapChipIndex
   GetMapChipIndexSetByPosition(const Vector::Vector3 &position) const;
   MapChipRect GetRectByIndex(uint32_t xIndex, uint32_t yIndex) const;
+  MapChipRect GetMapRect() const;
 
   uint32_t GetNumBlockVertical() const { return numBlockVertical; }
   uint32_t GetNumBlockHorizontal() const { return numBlockHorizontal; }

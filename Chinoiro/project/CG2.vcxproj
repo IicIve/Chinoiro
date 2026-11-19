@@ -155,6 +155,7 @@
     <ClCompile Include="src\engine\Framework.cpp" />
     <ClCompile Include="src\engine\Game.cpp" />
     <ClCompile Include="src\application\GamePlayScene.cpp" />
+    <ClCompile Include="src\application\GoalClearEffect.cpp" />
     <ClCompile Include="src\application\Enemy.cpp" />
     <ClCompile Include="src\application\MapChipField.cpp" />
     <ClCompile Include="src\application\Player.cpp" />
@@ -237,6 +238,7 @@
     <ClInclude Include="include\engine\Framework.h" />
     <ClInclude Include="include\engine\Game.h" />
     <ClInclude Include="include\application\GamePlayScene.h" />
+    <ClInclude Include="include\application\GoalClearEffect.h" />
     <ClInclude Include="include\application\Enemy.h" />
     <ClInclude Include="include\application\MapChipField.h" />
     <ClInclude Include="include\application\Player.h" />

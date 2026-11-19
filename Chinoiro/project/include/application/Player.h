@@ -30,6 +30,7 @@ public:
                   const Vector::Vector3 &position);
   void Update();
   void Draw();
+  void RefreshRenderObject() { UpdateRenderObject(); }
   void Respawn();
   void SetPosition(const Vector::Vector3 &newPosition);
   void SetRenderRotationY(float rotationY);
@@ -41,7 +42,10 @@ public:
 
   const Vector::Vector3 &GetPosition() const { return position; }
   const Vector::Vector3 &GetVelocity() const { return velocity; }
+  float GetRenderRotationY() const { return rotation.y; }
+  Vector::Vector3 GetHeadDecorationPosition() const;
   bool CanBeHit() const { return invincibilityFrames == 0; }
+  bool CanDoubleJump() const { return jumpCount < kMaxJumpCount; }
   bool IsAttacking() const;
   PlayerAABB GetAABB() const;
 
@@ -65,6 +69,7 @@ private:
   void ResolveHorizontalCollision(float moveX);
   void ResolveVerticalCollision(float moveY);
   bool IsStandingOnBlock() const;
+  int GetTouchingWallSide() const;
   bool OverlapsBlock(const PlayerAABB &aabb, uint32_t x,
                      uint32_t y) const;
   void UpdateRenderObject();
@@ -89,21 +94,27 @@ private:
   uint32_t invincibilityFrames = 0;
   uint32_t attackFrame = 0;
 
-  static constexpr float kHalfWidth = 0.4f;
+  // 通常時のプレイヤーモデル本体の半幅に合わせる。
+  // 前方へ伸びる装飾まで含めると操作感が悪くなるため、
+  // 壁判定は本体部分のみを対象にする。
+  static constexpr float kHalfWidth = 1.0f;
   static constexpr float kHalfHeight = 0.4f;
   static constexpr float kCollisionSkin = 0.01f;
   static constexpr float kGroundProbeDistance = 0.05f;
+  static constexpr float kWallProbeDistance = 0.05f;
   static constexpr float kGroundAcceleration = 0.1f;
   static constexpr float kAirAcceleration = 0.03f;
   static constexpr float kGroundAttenuation = 0.35f;
-  static constexpr float kMaxRunSpeed = 0.7f;
+  static constexpr float kMaxRunSpeed = 0.4f;
   static constexpr float kGravity = 0.1f;
   static constexpr float kMaxFallSpeed = 3.0f;
   static constexpr float kJumpSpeed = 1.3f;
+  static constexpr float kWallJumpHorizontalSpeed = 0.9f;
   static constexpr uint32_t kMaxJumpCount = 2;
   static constexpr uint32_t kRespawnInvincibilityFrames = 60;
-  static constexpr uint32_t kAttackChargeFrames = 30;
-  static constexpr uint32_t kAttackRushFrames = 30;
-  static constexpr uint32_t kAttackRecoveryFrames = 30;
-  static constexpr float kAttackRushSpeed = 0.8f;
+  static constexpr uint32_t kAttackChargeFrames = 24;
+  static constexpr uint32_t kAttackRushFrames = 12;
+  static constexpr uint32_t kAttackRecoveryFrames = 24;
+  // 通常移動との差を明確にし、空中でも勢いよく進める速度にする。
+  static constexpr float kAttackRushSpeed = 1.6f;
 };

@@ -8,6 +8,7 @@
 
 #include "Camera.h"
 #include "Enemy.h"
+#include "GoalClearEffect.h"
 #include "Input.h"
 #include "MapChipField.h"
 #include "Model.h"
@@ -24,13 +25,12 @@
 
 namespace {
 
-float ClampCameraCoordinate(float value, float blockSize,
-                            uint32_t numBlocks, float margin) {
-  const float extent = blockSize * static_cast<float>(numBlocks - 1);
-  if (extent <= margin * 2.0f) {
-    return extent * 0.5f;
+float ClampCameraCoordinate(float value, float minimum, float maximum,
+                            float margin) {
+  if (maximum - minimum <= margin * 2.0f) {
+    return (minimum + maximum) * 0.5f;
   }
-  return std::clamp(value, margin, extent - margin);
+  return std::clamp(value, minimum + margin, maximum - margin);
 }
 
 } // namespace
@@ -50,7 +50,6 @@ GamePlayScene::GamePlayScene(SceneManager *sceneManager, Input *input,
 GamePlayScene::~GamePlayScene() = default;
 
 void GamePlayScene::Initialize() {
-  fadeAlpha = 0.0f;
   introCameraProgress = 0.0f;
   introPlayerSpinProgress = 0.0f;
   introSparkEmitted = false;
@@ -58,6 +57,7 @@ void GamePlayScene::Initialize() {
   deathSmokeTimer = 0.0f;
   deathRotationZ = 0.0f;
   cameraShakeTimer = 0.0f;
+  doubleJumpTrailTimer = 0.0f;
   isPlayerDying = false;
   hasPlayerExploded = false;
 
@@ -88,14 +88,6 @@ void GamePlayScene::Initialize() {
   skyBox = std::make_unique<SkyBox>();
   skyBox->Initialize(dxCommon, "resources/sky_sphere.png");
   skyBox->Update(camera.get());
-
-  fadeSprite = std::make_unique<Sprite>();
-  fadeSprite->Initialize(SpriteCommon::GetInstance(), "resources/white.png");
-  fadeSprite->SetPosition({0.0f, 0.0f});
-  fadeSprite->SetSize({static_cast<float>(Window::kClientWidth),
-                       static_cast<float>(Window::kClientHeight)});
-  fadeSprite->SetColor({0.0f, 0.0f, 0.0f, fadeAlpha});
-  fadeSprite->Update();
 
   backToTitleSprite = std::make_unique<Sprite>();
   backToTitleSprite->Initialize(SpriteCommon::GetInstance(),
@@ -129,6 +121,20 @@ void GamePlayScene::Initialize() {
   introSparkParticles->SetLifeTimeRange(0.55f, 0.9f);
   introSparkParticles->SetSpeedRange(0.8f, 2.0f);
   introSparkParticles->SetEmitCount(14);
+
+  // 二段ジャンプが残っている間、頭の三角飾りから光の軌跡を出す。
+  doubleJumpTrailParticles = std::make_unique<ParticleManager>();
+  doubleJumpTrailParticles->Initialize(
+      dxCommon, srvManager, camera.get(), "resources/circle.png",
+      ParticleManager::PrimitiveType::Plane,
+      ParticleManager::BlendMode::Add);
+  doubleJumpTrailParticles->SetPlaneSize(0.5f, 0.5f);
+  doubleJumpTrailParticles->SetUniformScaleRange(0.55f, 0.9f);
+  doubleJumpTrailParticles->SetScaleVelocityRange(-1.4f, -0.8f);
+  doubleJumpTrailParticles->SetColor({0.18f, 0.8f, 1.0f, 0.9f});
+  doubleJumpTrailParticles->SetLifeTimeRange(0.25f, 0.45f);
+  doubleJumpTrailParticles->SetSpeedRange(0.05f, 0.3f);
+  doubleJumpTrailParticles->SetEmitCount(2);
 
   // 吹っ飛び中に残る煙。少量ずつ連続放出して軌跡にする。
   deathSmokeParticles = std::make_unique<ParticleManager>();
@@ -173,6 +179,9 @@ void GamePlayScene::Initialize() {
   deathSparkParticles->SetSpeedRange(7.0f, 12.0f);
   deathSparkParticles->SetEmitCount(28);
 
+  goalClearEffect = std::make_unique<GoalClearEffect>();
+  goalClearEffect->Initialize(dxCommon, srvManager, camera.get());
+
   // タイトル側と同じく顔の直前から開始する。
   camera->SetRotate({0.0f, 0.0f, 0.0f});
   camera->SetTranslate(
@@ -186,6 +195,11 @@ void GamePlayScene::Initialize() {
                                [this]() { GenerateMapObjects(); });
   RegisterEditorObjects();
   sceneEditor->LoadScene();
+
+  // ESC案内はプレイヤーへ追従させず、読み込まれたスタート地点の
+  // 少し上にワールド座標として固定する。
+  backToTitleWorldPosition = player->GetPosition();
+  backToTitleWorldPosition.y += 5.0f;
 }
 
 std::unique_ptr<Object3d>
@@ -206,6 +220,7 @@ void GamePlayScene::GenerateMapObjects() {
   needleObjects.clear();
   movingPlatforms.clear();
   hazardColliders.clear();
+  goalColliders.clear();
 
   for (uint32_t y = 0; y < mapChipField->GetNumBlockVertical(); ++y) {
     for (uint32_t x = 0; x < mapChipField->GetNumBlockHorizontal(); ++x) {
@@ -220,6 +235,7 @@ void GamePlayScene::GenerateMapObjects() {
 
       case MapChipType::Goal:
         goalObjects.emplace_back(CreateMapObject(goalModel.get(), position));
+        goalColliders.emplace_back(mapChipField->GetRectByIndex(x, y));
         break;
 
       case MapChipType::MovingPlatform: {
@@ -322,6 +338,21 @@ bool GamePlayScene::CheckPlayerHazardCollision() const {
         playerAABB.max.x > hazardRect.left &&
         playerAABB.min.y < hazardRect.top &&
         playerAABB.max.y > hazardRect.bottom;
+    if (isOverlapping) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool GamePlayScene::CheckPlayerGoalCollision() const {
+  const PlayerAABB playerAABB = player->GetAABB();
+  for (const MapChipRect &goalRect : goalColliders) {
+    const bool isOverlapping =
+        playerAABB.min.x < goalRect.right &&
+        playerAABB.max.x > goalRect.left &&
+        playerAABB.min.y < goalRect.top &&
+        playerAABB.max.y > goalRect.bottom;
     if (isOverlapping) {
       return true;
     }
@@ -439,12 +470,11 @@ void GamePlayScene::RespawnPlayer() {
   player->Respawn();
 
   const Vector::Vector3 &position = player->GetPosition();
+  const MapChipRect mapRect = mapChipField->GetMapRect();
   cameraPosition.x = ClampCameraCoordinate(
-      position.x, MapChipField::kBlockWidth,
-      mapChipField->GetNumBlockHorizontal(), 20.0f);
+      position.x, mapRect.left, mapRect.right, 20.0f);
   cameraPosition.y = ClampCameraCoordinate(
-      position.y, MapChipField::kBlockHeight,
-      mapChipField->GetNumBlockVertical(), 10.0f);
+      position.y, mapRect.bottom, mapRect.top, 10.0f);
   camera->SetTranslate(cameraPosition);
   camera->Update();
 }
@@ -460,12 +490,11 @@ void GamePlayScene::UpdateCamera() {
   cameraPosition.x += (targetX - cameraPosition.x) * kFollowRate;
   cameraPosition.y += (targetY - cameraPosition.y) * kFollowRate;
 
+  const MapChipRect mapRect = mapChipField->GetMapRect();
   cameraPosition.x = ClampCameraCoordinate(
-      cameraPosition.x, MapChipField::kBlockWidth,
-      mapChipField->GetNumBlockHorizontal(), 20.0f);
+      cameraPosition.x, mapRect.left, mapRect.right, 20.0f);
   cameraPosition.y = ClampCameraCoordinate(
-      cameraPosition.y, MapChipField::kBlockHeight,
-      mapChipField->GetNumBlockVertical(), 10.0f);
+      cameraPosition.y, mapRect.bottom, mapRect.top, 10.0f);
 
   Vector::Vector3 shakenCameraPosition = cameraPosition;
   if (cameraShakeTimer > 0.0f) {
@@ -477,9 +506,49 @@ void GamePlayScene::UpdateCamera() {
     cameraShakeTimer =
         (std::max)(0.0f, cameraShakeTimer - 1.0f / 60.0f);
   }
+  // カメラシェイク中もステージ端を越えないようにする。
+  shakenCameraPosition.x = ClampCameraCoordinate(
+      shakenCameraPosition.x, mapRect.left, mapRect.right, 20.0f);
+  shakenCameraPosition.y = ClampCameraCoordinate(
+      shakenCameraPosition.y, mapRect.bottom, mapRect.top, 10.0f);
 
   camera->SetTranslate(shakenCameraPosition);
   camera->Update();
+}
+
+void GamePlayScene::UpdateBackToTitleSpritePosition() {
+  const Matrix::Matrix4x4 &viewProjection =
+      camera->GetViewProjectionMatrix();
+  const Vector::Vector3 &world = backToTitleWorldPosition;
+
+  // このエンジンは行ベクトルで座標変換するため、ワールド座標を
+  // ViewProjectionへ掛けてNDC座標へ変換する。
+  const float clipX = world.x * viewProjection.m[0][0] +
+                      world.y * viewProjection.m[1][0] +
+                      world.z * viewProjection.m[2][0] +
+                      viewProjection.m[3][0];
+  const float clipY = world.x * viewProjection.m[0][1] +
+                      world.y * viewProjection.m[1][1] +
+                      world.z * viewProjection.m[2][1] +
+                      viewProjection.m[3][1];
+  const float clipW = world.x * viewProjection.m[0][3] +
+                      world.y * viewProjection.m[1][3] +
+                      world.z * viewProjection.m[2][3] +
+                      viewProjection.m[3][3];
+
+  if (clipW <= 0.001f) {
+    backToTitleSprite->SetPosition({-10000.0f, -10000.0f});
+    return;
+  }
+
+  const float inverseW = 1.0f / clipW;
+  const float screenX =
+      (clipX * inverseW + 1.0f) * 0.5f *
+      static_cast<float>(Window::kClientWidth);
+  const float screenY =
+      (1.0f - clipY * inverseW) * 0.5f *
+      static_cast<float>(Window::kClientHeight);
+  backToTitleSprite->SetPosition({screenX, screenY});
 }
 
 void GamePlayScene::Update() {
@@ -551,12 +620,31 @@ void GamePlayScene::Update() {
   }
 
   sceneEditor->Update({cameraPosition.x, cameraPosition.y, 0.0f});
-  if (input->TriggerKey(DIK_ESCAPE)) {
+  if (!goalClearEffect->IsPlaying() && input->TriggerKey(DIK_ESCAPE)) {
     sceneManager->ChangeScene(SceneType::Title);
     return;
   }
 
   if (!sceneEditor->ShouldRunGame()) {
+    // 編集中はゲームロジックを止めたまま、移動したカメラだけを
+    // すべての描画オブジェクトへ反映する。
+    skyBox->Update(camera.get());
+    for (const std::unique_ptr<Object3d> &object : blockObjects) {
+      object->Update();
+    }
+    for (const std::unique_ptr<Object3d> &object : goalObjects) {
+      object->Update();
+    }
+    for (const std::unique_ptr<Object3d> &object : needleObjects) {
+      object->Update();
+    }
+    for (MovingPlatform &platform : movingPlatforms) {
+      platform.object->Update();
+    }
+    player->RefreshRenderObject();
+    for (const std::unique_ptr<Enemy> &enemy : enemies) {
+      enemy->RefreshRenderObject();
+    }
     return;
   }
 
@@ -574,7 +662,12 @@ void GamePlayScene::Update() {
     platform.object->SetTranslate(position);
   }
 
-  if (isPlayerDying) {
+  if (goalClearEffect->IsPlaying()) {
+    if (goalClearEffect->Update(1.0f / 60.0f)) {
+      sceneManager->ChangeScene(SceneType::Title);
+      return;
+    }
+  } else if (isPlayerDying) {
     constexpr float kDeltaTime = 1.0f / 60.0f;
     playerDeathTimer += kDeltaTime;
 
@@ -616,26 +709,49 @@ void GamePlayScene::Update() {
     }
   } else {
     player->Update();
-    if (CheckPlayerHazardCollision()) {
-      RespawnPlayer();
+
+    if (player->CanDoubleJump()) {
+      doubleJumpTrailTimer += 1.0f / 60.0f;
+      if (doubleJumpTrailTimer >= 0.05f) {
+        doubleJumpTrailParticles->Emit(
+            player->GetHeadDecorationPosition());
+        doubleJumpTrailTimer = 0.0f;
+      }
+    } else {
+      // 二段目を使った瞬間に軌跡を消す。着地して回数が戻ると
+      // 再び頭の飾りから放出される。
+      doubleJumpTrailParticles->Clear();
+      doubleJumpTrailTimer = 0.0f;
     }
-    for (const std::unique_ptr<Enemy> &enemy : enemies) {
-      enemy->Update();
-    }
-    CheckPlayerEnemyCollisions();
-    for (const MovingPlatform &platform : movingPlatforms) {
-      const Vector::Vector3 &position = platform.object->GetTranslate();
-      const MapChipRect platformRect = {
-          position.x - MapChipField::kBlockWidth / 2.0f,
-          position.x + MapChipField::kBlockWidth / 2.0f,
-          position.y - MapChipField::kBlockHeight / 2.0f,
-          position.y + MapChipField::kBlockHeight / 2.0f,
-      };
-      player->ResolveMovingPlatformCollision(platformRect,
-                                             platform.moveDelta);
+
+    if (CheckPlayerGoalCollision()) {
+      doubleJumpTrailParticles->Clear();
+      goalClearEffect->Start(player.get());
+    } else {
+      if (CheckPlayerHazardCollision()) {
+        RespawnPlayer();
+      }
+      for (const std::unique_ptr<Enemy> &enemy : enemies) {
+        enemy->Update();
+      }
+      CheckPlayerEnemyCollisions();
+      for (const MovingPlatform &platform : movingPlatforms) {
+        const Vector::Vector3 &position = platform.object->GetTranslate();
+        const MapChipRect platformRect = {
+            position.x - MapChipField::kBlockWidth / 2.0f,
+            position.x + MapChipField::kBlockWidth / 2.0f,
+            position.y - MapChipField::kBlockHeight / 2.0f,
+            position.y + MapChipField::kBlockHeight / 2.0f,
+        };
+        player->ResolveMovingPlatformCollision(platformRect,
+                                               platform.moveDelta);
+      }
     }
   }
-  UpdateCamera();
+  if (!goalClearEffect->IsPlaying()) {
+    UpdateCamera();
+  }
+  UpdateBackToTitleSpritePosition();
   skyBox->Update(camera.get());
 
   for (const std::unique_ptr<Object3d> &object : blockObjects) {
@@ -651,16 +767,12 @@ void GamePlayScene::Update() {
     platform.object->Update();
   }
 
-  constexpr float kFadeSpeed = 2.0f;
-  fadeAlpha -= kFadeSpeed / 60.0f;
-  if (fadeAlpha < 0.0f) {
-    fadeAlpha = 0.0f;
-  }
-  fadeSprite->SetColor({0.0f, 0.0f, 0.0f, fadeAlpha});
-  fadeSprite->Update();
-  backToTitleSprite->SetColor({1.0f, 1.0f, 1.0f, 0.9f});
+  backToTitleSprite->SetColor(
+      {1.0f, 1.0f, 1.0f,
+       goalClearEffect->IsPlaying() ? 0.0f : 0.9f});
   backToTitleSprite->Update();
   introSparkParticles->Update(1.0f / 60.0f);
+  doubleJumpTrailParticles->Update(1.0f / 60.0f);
   deathSmokeParticles->Update(1.0f / 60.0f);
   deathBurstParticles->Update(1.0f / 60.0f);
   deathSparkParticles->Update(1.0f / 60.0f);
@@ -692,14 +804,16 @@ void GamePlayScene::Draw() {
     enemy->Draw();
   }
   introSparkParticles->Draw();
+  doubleJumpTrailParticles->Draw();
   deathSmokeParticles->Draw();
   deathBurstParticles->Draw();
   deathSparkParticles->Draw();
+  goalClearEffect->DrawParticles();
 
   SpriteCommon::GetInstance()->CreatePrimitiveTopology();
   if (!sceneEditor->IsEditMode()) {
     backToTitleSprite->Draw();
-    fadeSprite->Draw();
+    goalClearEffect->DrawFade();
   }
 }
 
@@ -709,15 +823,17 @@ void GamePlayScene::Finalize() {
     sceneEditor.reset();
   }
   introSparkParticles.reset();
+  doubleJumpTrailParticles.reset();
+  goalClearEffect.reset();
   deathSparkParticles.reset();
   deathBurstParticles.reset();
   deathSmokeParticles.reset();
   backToTitleSprite.reset();
-  fadeSprite.reset();
   enemies.clear();
   player.reset();
   movingPlatforms.clear();
   hazardColliders.clear();
+  goalColliders.clear();
   needleObjects.clear();
   goalObjects.clear();
   blockObjects.clear();

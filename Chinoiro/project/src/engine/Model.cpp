@@ -191,7 +191,11 @@ Model::ModelData Model::LoadModelFile(const std::string& directoryPath, const st
 		aiMesh* mesh = scene->mMeshes[meshIndex];
 		assert(mesh->HasNormals());//法線がないメッシュは非対応
 		assert(mesh->HasTextureCoords(0));//テクスチャ座標がないメッシュは非対応
-		modelData.vertices.resize(mesh->mNumVertices);//最初に頂点数分のメモリを確保しておく
+		// マテリアルごとに分割された複数メッシュを、
+		// 前のデータを上書きせず1つのバッファへ追加する。
+		const uint32_t baseVertex =
+			static_cast<uint32_t>(modelData.vertices.size());
+		modelData.vertices.resize(baseVertex + mesh->mNumVertices);
 
 		for (uint32_t vertexIndex = 0; vertexIndex < mesh->mNumVertices; ++vertexIndex) {
 			aiVector3D& position = mesh->mVertices[vertexIndex];
@@ -199,9 +203,9 @@ Model::ModelData Model::LoadModelFile(const std::string& directoryPath, const st
 			aiVector3D& texcoord = mesh->mTextureCoords[0][vertexIndex];
 
 			//右手系から左手系に変換
-			modelData.vertices[vertexIndex].position = { -position.x, position.y, position.z, 1.0f };
-			modelData.vertices[vertexIndex].normal = { -normal.x, normal.y, normal.z };
-			modelData.vertices[vertexIndex].texcoord = { texcoord.x, texcoord.y };
+			modelData.vertices[baseVertex + vertexIndex].position = { -position.x, position.y, position.z, 1.0f };
+			modelData.vertices[baseVertex + vertexIndex].normal = { -normal.x, normal.y, normal.z };
+			modelData.vertices[baseVertex + vertexIndex].texcoord = { texcoord.x, texcoord.y };
 		}
 
 		for (uint32_t faceIndex = 0; faceIndex < mesh->mNumFaces; ++faceIndex) {
@@ -209,7 +213,7 @@ Model::ModelData Model::LoadModelFile(const std::string& directoryPath, const st
 			assert(face.mNumIndices == 3);
 
 			for (uint32_t element = 0; element < face.mNumIndices; ++element) {
-				uint32_t vertexIndex = face.mIndices[element];
+				uint32_t vertexIndex = baseVertex + face.mIndices[element];
 				modelData.indices.push_back(vertexIndex);
 			}
 		
@@ -229,7 +233,7 @@ Model::ModelData Model::LoadModelFile(const std::string& directoryPath, const st
 			jointWeightData.inverseBindPoseMatrix = Inverse(bindPoseMatrix);
 
 			for (uint32_t weightIndex = 0; weightIndex < bone->mNumWeights; ++weightIndex) {
-				jointWeightData.vertexWeights.push_back({bone->mWeights[weightIndex].mWeight, bone->mWeights[weightIndex].mVertexId});
+				jointWeightData.vertexWeights.push_back({bone->mWeights[weightIndex].mWeight, baseVertex + bone->mWeights[weightIndex].mVertexId});
 			}
 
 		}

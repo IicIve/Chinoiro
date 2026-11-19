@@ -190,13 +190,20 @@ void ParticleManager::SetSpeedRange(float minSpeed, float maxSpeed) {
 	maxSpeed_ = maxSpeed;
 }
 
+void ParticleManager::SetDirectionRange(const Vector3& minDirection, const Vector3& maxDirection) {
+	minDirection_ = minDirection;
+	maxDirection_ = maxDirection;
+}
+
 void ParticleManager::SetEmitCount(uint32_t emitCount) {
 	emitCount_ = emitCount;
 }
 
 Particle ParticleManager::MakeNewParticle(std::mt19937& randomEngine) {
 	std::uniform_real_distribution<float> positionDistribution{ -0.2f, 0.2f };
-	std::uniform_real_distribution<float> directionDistribution{ -1.0f, 1.0f };
+	std::uniform_real_distribution<float> directionXDistribution{ minDirection_.x, maxDirection_.x };
+	std::uniform_real_distribution<float> directionYDistribution{ minDirection_.y, maxDirection_.y };
+	std::uniform_real_distribution<float> directionZDistribution{ minDirection_.z, maxDirection_.z };
 	std::uniform_real_distribution<float> speedDistribution{ minSpeed_, maxSpeed_ };
 	std::uniform_real_distribution<float> rotateDistribution{ minRotate_, maxRotate_ };
 	std::uniform_real_distribution<float> lengthDistribution{ minLength_, maxLength_ };
@@ -210,9 +217,9 @@ Particle ParticleManager::MakeNewParticle(std::mt19937& randomEngine) {
 
 	do {
 		direction = {
-			directionDistribution(randomEngine),
-			directionDistribution(randomEngine),
-			directionDistribution(randomEngine)
+			directionXDistribution(randomEngine),
+			directionYDistribution(randomEngine),
+			directionZDistribution(randomEngine)
 		};
 		length = std::sqrt(direction.x * direction.x + direction.y * direction.y + direction.z * direction.z);
 	} while (length <= 0.001f);

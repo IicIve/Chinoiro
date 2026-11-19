@@ -65,6 +65,7 @@ private:
   void SaveScene();
   void DrawTileMapEditor();
   void SetMode(Mode newMode);
+  void UpdateEditorCamera();
 
   Camera *camera = nullptr;
   Input *input = nullptr;
@@ -80,7 +81,9 @@ private:
   Mode mode = Mode::Edit;
   bool visible = true;
   bool pauseGame = false;
+  bool editorCameraInitialized = false;
   bool tileMapDirty = false;
+  Vector::Vector3 editorCameraPosition{};
   int selectedTileType = 1;
   int tileMapWidth = 100;
   int tileMapHeight = 20;

@@ -178,23 +178,16 @@ MapChipField::GetMapChipPositionByIndex(uint32_t xIndex,
 MapChipIndex MapChipField::GetMapChipIndexSetByPosition(
     const Vector::Vector3 &position) const {
   constexpr uint32_t kInvalidIndex = std::numeric_limits<uint32_t>::max();
-  const float mapLeft = -kBlockWidth / 2.0f;
-  const float mapRight =
-      kBlockWidth * static_cast<float>(numBlockHorizontal - 1) +
-      kBlockWidth / 2.0f;
-  const float mapTop =
-      kBlockHeight * static_cast<float>(numBlockVertical - 1) +
-      kBlockHeight / 2.0f;
-  const float mapBottom = -kBlockHeight / 2.0f;
+  const MapChipRect mapRect = GetMapRect();
 
-  if (position.x < mapLeft || position.x >= mapRight ||
-      position.y < mapBottom || position.y >= mapTop) {
+  if (position.x < mapRect.left || position.x >= mapRect.right ||
+      position.y < mapRect.bottom || position.y >= mapRect.top) {
     return {kInvalidIndex, kInvalidIndex};
   }
 
   return {
-      static_cast<uint32_t>((position.x - mapLeft) / kBlockWidth),
-      static_cast<uint32_t>((mapTop - position.y) / kBlockHeight),
+      static_cast<uint32_t>((position.x - mapRect.left) / kBlockWidth),
+      static_cast<uint32_t>((mapRect.top - position.y) / kBlockHeight),
   };
 }
 
@@ -207,5 +200,16 @@ MapChipRect MapChipField::GetRectByIndex(uint32_t xIndex,
       center.x + kBlockWidth / 2.0f,
       center.y - kBlockHeight / 2.0f,
       center.y + kBlockHeight / 2.0f,
+  };
+}
+
+MapChipRect MapChipField::GetMapRect() const {
+  return {
+      -kBlockWidth / 2.0f,
+      kBlockWidth * static_cast<float>(numBlockHorizontal - 1) +
+          kBlockWidth / 2.0f,
+      -kBlockHeight / 2.0f,
+      kBlockHeight * static_cast<float>(numBlockVertical - 1) +
+          kBlockHeight / 2.0f,
   };
 }

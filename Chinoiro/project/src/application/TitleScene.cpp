@@ -269,10 +269,15 @@ void TitleScene::Update() {
       titleY + kPlayerLocalY * titleScale,
       titleZ +
           (-kPlayerLocalX * sinY + kPlayerLocalZ * cosY) * titleScale};
-  playerObject->SetTranslate(playerPosition);
+  // player.objの原点を中心から足元へ移した分を、
+  // タイトルでの表示スケール込みで補正する。
+  constexpr float kPlayerOriginYOffset = 1.000235f;
+  const float playerScale = 1.2f * titleScale;
+  Vector::Vector3 playerRenderPosition = playerPosition;
+  playerRenderPosition.y -= kPlayerOriginYOffset * playerScale;
+  playerObject->SetTranslate(playerRenderPosition);
   playerObject->SetRotate({0.0f, titleRotation + 4.2f, 0.0f});
-  playerObject->SetScale(
-      {1.2f * titleScale, 1.2f * titleScale, 1.2f * titleScale});
+  playerObject->SetScale({playerScale, playerScale, playerScale});
 
   // ゲーム開始時はプレイヤーの顔へ一気にカメラを寄せる。
   // 顔が画面全体を覆ったフレームでシーンを切り替える。

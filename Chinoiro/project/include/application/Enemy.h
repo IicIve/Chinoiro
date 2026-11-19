@@ -28,6 +28,7 @@ public:
                   const Vector::Vector3 &position);
   void Update();
   void Draw();
+  void RefreshRenderObject() { UpdateRenderObject(); }
   void SetPosition(const Vector::Vector3 &newPosition);
 
   const Vector::Vector3 &GetPosition() const { return position; }

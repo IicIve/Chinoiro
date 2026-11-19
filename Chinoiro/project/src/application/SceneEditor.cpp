@@ -49,6 +49,7 @@ void SceneEditor::Initialize(Camera *camera, Input *input) {
   status = "Play Mode";
 #endif
   pauseGame = false;
+  editorCameraInitialized = false;
   RefreshAssets();
 }
 
@@ -63,6 +64,7 @@ void SceneEditor::Update(const Vector::Vector3 &spawnPosition) {
   }
 #endif
 
+  UpdateEditorCamera();
   DrawUI(spawnPosition);
   for (EditorObject &editorObject : objects) {
     editorObject.object->Update();
@@ -112,9 +114,35 @@ void SceneEditor::RegisterSceneObject(
 void SceneEditor::SetMode(Mode newMode) {
   mode = newMode;
   pauseGame = false;
+  editorCameraInitialized = false;
   status = mode == Mode::Edit
                ? "Edit Mode - game logic and collisions are stopped"
                : "Play Mode - game logic and collisions are running";
+}
+
+void SceneEditor::UpdateEditorCamera() {
+  if (mode != Mode::Edit) {
+    editorCameraInitialized = false;
+    return;
+  }
+
+  if (!editorCameraInitialized) {
+    editorCameraPosition = camera->GetTranslate();
+    editorCameraInitialized = true;
+  }
+
+  // DirectInputの2番ボタンはホイール（中ボタン）。キャンバスを
+  // つかんで動かす感覚になるよう、ドラッグと逆向きへカメラを移す。
+  if (input->PushMouse(2)) {
+    constexpr float kCameraPanSpeed = 0.08f;
+    editorCameraPosition.x -=
+        static_cast<float>(input->GetMouseMoveX()) * kCameraPanSpeed;
+    editorCameraPosition.y +=
+        static_cast<float>(input->GetMouseMoveY()) * kCameraPanSpeed;
+  }
+
+  camera->SetTranslate(editorCameraPosition);
+  camera->Update();
 }
 
 void SceneEditor::RefreshAssets() {
@@ -507,6 +535,10 @@ void SceneEditor::DrawUI(const Vector::Vector3 &spawnPosition) {
       ImGui::EndMenu();
     }
     ImGui::TextDisabled("  F1: Editor On/Off");
+    if (editMode) {
+      ImGui::SameLine();
+      ImGui::TextDisabled("  MMB Drag: Pan Camera");
+    }
     ImGui::EndMainMenuBar();
   }
 

@@ -10,6 +10,7 @@
 class Camera;
 class DirectXCommon;
 class Enemy;
+class GoalClearEffect;
 class Input;
 class Model;
 class ModelCommon;
@@ -51,11 +52,13 @@ private:
   void RegisterEditorObjects();
   void CheckPlayerEnemyCollisions();
   bool CheckPlayerHazardCollision() const;
+  bool CheckPlayerGoalCollision() const;
   void BeginPlayerDeath(const Vector::Vector3 &enemyPosition);
   void ResolveDeathAnimationMapCollision(
       const Vector::Vector3 &movement);
   void RespawnPlayer();
   void UpdateCamera();
+  void UpdateBackToTitleSpritePosition();
 
   SceneManager *sceneManager = nullptr;
   Input *input = nullptr;
@@ -71,9 +74,10 @@ private:
   std::unique_ptr<Model> enemyModel;
   std::unique_ptr<Camera> camera;
   std::unique_ptr<SkyBox> skyBox;
-  std::unique_ptr<Sprite> fadeSprite;
   std::unique_ptr<Sprite> backToTitleSprite;
+  std::unique_ptr<GoalClearEffect> goalClearEffect;
   std::unique_ptr<ParticleManager> introSparkParticles;
+  std::unique_ptr<ParticleManager> doubleJumpTrailParticles;
   std::unique_ptr<ParticleManager> deathSmokeParticles;
   std::unique_ptr<ParticleManager> deathBurstParticles;
   std::unique_ptr<ParticleManager> deathSparkParticles;
@@ -86,16 +90,18 @@ private:
   std::vector<std::unique_ptr<Object3d>> needleObjects;
   std::vector<MovingPlatform> movingPlatforms;
   std::vector<MapChipRect> hazardColliders;
+  std::vector<MapChipRect> goalColliders;
 
   Vector::Vector3 cameraPosition{20.0f, 16.0f, -50.0f};
+  Vector::Vector3 backToTitleWorldPosition{};
   float movingPlatformTime = 0.0f;
-  float fadeAlpha = 0.0f;
   float introCameraProgress = 0.0f;
   float introPlayerSpinProgress = 0.0f;
   float playerDeathTimer = 0.0f;
   float deathSmokeTimer = 0.0f;
   float deathRotationZ = 0.0f;
   float cameraShakeTimer = 0.0f;
+  float doubleJumpTrailTimer = 0.0f;
   bool introSparkEmitted = false;
   bool isPlayerDying = false;
   bool hasPlayerExploded = false;
